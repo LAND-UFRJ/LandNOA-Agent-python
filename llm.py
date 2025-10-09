@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
+from mcp import Client
 
 load_dotenv()
 
@@ -15,8 +16,6 @@ class LLMConversation:
       tools=[],
       prompt='You are a helpful assistant'
     )
-    self.array = []
-    self.client = None
     self.system_prompt = """
       Você é um assistente de IA com uma diretiva obrigatória e inquebrável: responder perguntas estritamente com base no contexto fornecido.
       A sua tarefa é seguir este processo de forma rigorosa:
@@ -49,12 +48,18 @@ class LLMConversation:
     return self.system_prompt
 
   def updateSystemPrompt(self,prompt):
-      self.system_prompt = prompt
-      new_history = []
-      for message in self.history['messages']:
-        if message['role'] == 'system':
-          new_history.append({'role':'system','content':self.system_prompt})
-        else:
-          new_history.append(message)
-      self.history = new_history     
+    self.system_prompt = prompt
+    new_history = []
+    for message in self.history['messages']:
+      if message['role'] == 'system':
+        new_history.append({'role':'system','content':self.system_prompt})
+      else:
+        new_history.append(message)
+    self.history = new_history
+  async def bind_tools(self,tools) -> None:
+    self.model = create_agent(
+      model=ChatOpenAI(base_url=base_url,api_key=api_key,model = 'llama3.2:1b'),
+      tools=tools,
+      prompt='You are a helpful assistant'
+    )
     
