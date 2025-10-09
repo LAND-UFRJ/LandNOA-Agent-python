@@ -34,7 +34,7 @@ class Client:
     This method initializes the MultiServerMCPClient using
     the object's array attribute and assigns it to self.client.
     """
-    self.client = MultiServerMCPClient(self.array)  
+    self.client = MultiServerMCPClient(self.array)
   async def get_tools(self):
     """Asynchronously retrieve the tools from the bound client.
     Returns:

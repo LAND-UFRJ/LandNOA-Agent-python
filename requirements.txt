@@ -6,3 +6,9 @@ langchain-core==1.0.0a8
 langchain-openai==1.0.0a4
 langchain-mcp-adapters==0.1.11
 flask
+PyPDF2
+unstructured[pdf]
+nltk
+scikit-learn
+sentence-transformers
+FlagEmbedding
