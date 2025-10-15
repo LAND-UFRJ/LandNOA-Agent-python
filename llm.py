@@ -1,13 +1,13 @@
 import os
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
-from langchain.agents import create_agent
+from google.adk.agents import LlmAgent
 from retrieval import Retriever
 
 load_dotenv()
 
 api_key = os.environ.get('OPENAI_API_KEY')
 base_url = os.environ.get('OPENAI_BASE_URL')
+model = os.environ.get('OPENAI_MODEL')
 
 retriever = Retriever()
 
@@ -17,10 +17,8 @@ class LlmConversation:
   def __init__(self):
     """Initialize the LlmConversation instance with
       default model, tools, and system prompt."""
-    self.model = create_agent(
-      model=ChatOpenAI(base_url=base_url,api_key=api_key,model = 'llama3.2:1b'),
-      tools=[],
-      prompt='You are a helpful assistant'
+    self.model = LlmAgent(
+      model= f"openai/{model}"
     )
     self.system_prompt = """
       Você é um assistente de IA com uma diretiva obrigatória e inquebrável: responder perguntas estritamente com base no contexto fornecido.
@@ -47,6 +45,7 @@ class LlmConversation:
         str: The text output from the LLM.
     """
     #todo: fazer método melhor de escolher qual método usar
+
     self.history['messages'].append({'role':'user','content':human_input})
     rag = retriever.sentence_window_retrieval(query=human_input,
                                               collection_name=self.collection)
@@ -100,8 +99,7 @@ class LlmConversation:
     Args:
         tools: The tools to bind to the agent.
     """
-    self.model = create_agent(
-      model=ChatOpenAI(base_url=base_url,api_key=api_key,model = 'llama3.2:1b'),
-      tools=tools,
-      prompt='You are a helpful assistant'
+    self.model = LlmAgent(
+      model= f"openai/{model}",
+      tools=tools
     )

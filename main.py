@@ -3,12 +3,12 @@ import time
 import threading
 import atexit
 import requests
+from functools import wraps
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
-from functools import wraps
 from chromadb import HttpClient
 from llm import LlmConversation
-from mcp import Client
+from mcp_local import Client
 from indexing import Splitter
 
 load_dotenv()
@@ -19,7 +19,9 @@ load_dotenv()
 #Onde parei: Endpoints para poder manipular (atualmente so penso em adicionar) coleções
 #Onde parei: metricas (prometheus) de avaliação de do sistema (tokens, tempo ligado,requests recebidas)
 #Possíveis amelhoramentos: Monitorar conversas (MongoDB), Validação do RAG, Fazer interface (que de para manipular RAG e parametros como um todo)
+#Administrção de Sessão
 #####################################################################################
+
 AGENT_ID = os.getenv("AI_GUIDE_AGENT_ID")
 AGENT_SECRET_TOKEN = os.getenv("AI_GUIDE_AGENT_SECRET_TOKEN")
 AGENT_BASE_URL = os.getenv("AI_GUIDE_AGENT_BASE_URL")
@@ -147,61 +149,6 @@ def delete_collections():
   except Exception as e:
     return jsonify({"error": f"Error while deleting chroma collections: {e}"}), 500
 
-@require_auth
-@app.route('/collections/<collection_name>/add', methods=['POST'])
-def add_to_collection(collection_name):
-  """Add a PDF or text content to the specified Chroma collection.
-  Expects JSON payload with 'type' ('pdf' or 'text'), and 'content' (text string) or file upload for PDF.
-  Args:
-      collection_name (str): The name of the Chroma collection.
-  Returns:
-      dict: A dictionary with the status message and code.
-  """
-  try:
-    # Check if collection exists
-    collections = chroma_client.list_collections()
-    if collection_name not in [c.name for c in collections]:
-      return jsonify({"error": f"Collection '{collection_name}' does not exist."}), 404
-    data = request.get_json()
-    content_type = data.get('type')
-    if content_type == 'text':
-      text = data.get('content')
-      if not text:
-        return jsonify({"error": "No content provided for text type."}), 400
-      # Split text into chunks (simple split for now)
-      chunks = [text[i:i+750] for i in range(0, len(text), 750)]
-    elif content_type == 'pdf':
-      # For PDF, expect file upload
-      if 'file' not in request.files:
-        return jsonify({"error": "No file provided for PDF type."}), 400
-      file = request.files['file']
-      if file.filename == '':
-        return jsonify({"error": "No file selected."}), 400
-      # Save file temporarily
-      import tempfile
-      with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
-        file.save(temp_file.name)
-        temp_path = temp_file.name
-      # Process PDF
-      from indexing import equal_chunks
-      chunks = equal_chunks(temp_path)
-      os.unlink(temp_path)  # Clean up
-    else:
-        return jsonify({"error": "Invalid type. Use 'pdf' or 'text'."}), 400
-    # Embed chunks and add to collection
-    from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    embeddings = model.encode(chunks)
-    collection = chroma_client.get_collection(collection_name)
-    collection.add(
-        documents=chunks,
-        embeddings=embeddings.tolist(),
-        ids=[f"{collection_name}_{i}" for i in range(len(chunks))]
-    )
-    return {"status": f"Added {len(chunks)} chunks to collection '{collection_name}'."}, 200
-  except Exception as e:
-      return jsonify({"error": f"Error adding to collection: {e}"}), 500
-      
 
 @app.route('/api/v1/mcp/add',methods=['POST'])
 @require_auth
@@ -235,7 +182,7 @@ async def list_tools():
   """List avaliable tools"""
   try:
     cache_tools = mcp_client.array
-    tools = await mcp_client.get_tools()
+    tools = [mcp_client.array[i]['name'] for i in range(len(mcp_client.array))]
     return {"status": f"""The cached tools are {cache_tools}
                       and the binded tools are {tools} """}, 200
   except Exception as e:
@@ -250,7 +197,7 @@ async def bind_tools():
       dict: A dictionary with the status message and code.
   """
   try:
-    tools = await mcp_client.get_tools()
+    tools = mcp_client.tools
     llm.bind_tools(tools=tools)
     return {"status": f"tools {tools} were sucessfully binded"}, 200
   except Exception as e:

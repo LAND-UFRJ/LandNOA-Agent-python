@@ -10,9 +10,10 @@ load_dotenv()
 openai_url = os.getenv('OPENAI_BASE_URL')
 openai_key = os.getenv('OPENAI_KEY')
 chroma_url = os.getenv('CHROMA_URL')
+chorma_port = int(os.getenv('CHROMADB_PORT'))
 model = os.getenv('OPENAI_MODEL')
 
-client = chromadb.HttpClient(host=chroma_url)
+client = chromadb.HttpClient(host=chroma_url,port=chorma_port)
 
 llm = ChatOpenAI(base_url=openai_url,model=model,api_key='')
 
