@@ -55,7 +55,7 @@ class Splitter():
     documents = []
     for c in raw_chunks:
       documents.append(c.text)
-      return documents
+    return documents
   # Functions to return semantic chunks
   def simple_decision(self,
                       start_limit:float,
