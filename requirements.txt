@@ -9,3 +9,9 @@ nltk
 scikit-learn
 sentence-transformers
 FlagEmbedding
+litellm
+a2a
+a2a-sdk[all]
+urllib3 < 2.4.0
+langchain_text_splitters
+langchain_openai

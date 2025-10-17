@@ -3,16 +3,15 @@ import time
 import threading
 import atexit
 import requests
+from pathlib import Path
+from Utils import agent_menager
 from functools import wraps
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from chromadb import HttpClient
-from llm import LlmConversation
-from mcp_local import Client
-from indexing import Splitter
+from Utils.indexing import Splitter
 
 load_dotenv()
-
 
 #####################################################################################
 #Onde parei: Funções de splitting só aceitam pdf, tem que poder aceitar texto puro tb.
@@ -22,11 +21,13 @@ load_dotenv()
 #Administrção de Sessão
 #####################################################################################
 
-AGENT_ID = os.getenv("AI_GUIDE_AGENT_ID")
-AGENT_SECRET_TOKEN = os.getenv("AI_GUIDE_AGENT_SECRET_TOKEN")
-AGENT_BASE_URL = os.getenv("AI_GUIDE_AGENT_BASE_URL")
+AGENT_PATH = Path("agents/root_agent/agent.py")
+
+AGENT_ID = os.getenv("AGENT_ID")
+AGENT_SECRET_TOKEN = os.getenv("AGENT_SECRET_TOKEN")
+AGENT_BASE_URL = os.getenv("AGENT_BASE_URL")
 REGISTRY_BASE_URL = os.getenv("REGISTRY_BASE_URL")
-FLASK_RUN_PORT = int(os.getenv("AI_GUIDE_FLASK_RUN_PORT", '8010'))
+FLASK_RUN_PORT = int(os.getenv("FLASK_RUN_PORT", '8010'))
 chorma_url = os.getenv('CHROMADB_URL')
 chorma_port = os.getenv('CHROMADB_PORT')
 
@@ -42,10 +43,6 @@ TOOLS_SCHEMA = [
         "parameters": {"pergunta": "string"}
     }
 ]
-
-llm = LlmConversation()
-
-mcp_client = Client()
 
 splitter = Splitter()
 
@@ -77,22 +74,6 @@ def require_auth(f):
 def health_check():
   """Endpoint para o Docker verificar se o AI Guide Agent está online."""
   return jsonify({"status": "ok"}), 200
-
-@app.route('/api/v1/send', methods=['POST'])
-@require_auth
-def execute_task():
-  """Execute a task by invoking the LLM with the
-    provided query and returning the response."""
-  a2a_message = request.get_json()
-  query = a2a_message.get("payload", {}).get("query")
-  #user_uuid = a2a_message.get("payload", {}).get("uuid")
-  if not query:
-    return jsonify({"error": "A 'query' não foi recebida."}), 400
-  try:
-    response = llm.invoke(query)
-    return jsonify({"result": response})
-  except Exception as e:
-    return jsonify({"error": f"Erro interno do agente Guia de IA: {e}"}), 500
 
 @app.route('/api/v1/collections/list',methods=['GET'])
 @require_auth
@@ -150,75 +131,52 @@ def delete_collections():
     return jsonify({"error": f"Error while deleting chroma collections: {e}"}), 500
 
 
-@app.route('/api/v1/mcp/add',methods=['POST'])
-@require_auth
+@app.route("/api/v1/mcp/add", methods=["POST"])
 def add_tool():
-  """Add a new tool to the MCP client."""
-  try:
-    tool = request.get_json()
-    name,url = tool.get("name"), tool.get("url")
-    mcp_client.add_tool(name=name,url=url)
-    return{"status": f"tool {name} with url {url} added sucessfully"}, 200
-  except Exception as e:
-    return jsonify({"error": f"Error when adding tool {tool} with url {url}: {e}"}), 500
-
-@app.route('/api/v1/mcp/remove',methods=['POST'])
-@require_auth
-def delete_tool():
-  """Remove a tool from the MCP client."""
+  """Adds a tool to the Agent configuration JSON"""
   tool = request.get_json()
-  name = tool.get("name")
   try:
-    if mcp_client.remove_tool(name = name):
-      return {"status": f"tool {name} was removed sucessfully"}, 200
+    agent_menager.add_tool(tool["name"], tool["url"])
+    # Touch agent.py to trigger ADK hot reload
+    AGENT_PATH.touch()
+    return {"status": f"Tool {tool['name']} added successfully"}, 200
+  except Exception as e:
+    return jsonify({"error": str(e)}), 500
+
+@app.route("/api/v1/mcp/remove", methods=["POST"])
+def remove_tool():
+  """Removes a tool from the Agent configuration JSON"""
+  tool = request.get_json()
+  try:
+    if agent_menager.remove_tool(tool["name"]):
+      AGENT_PATH.touch()
+      return {"status": f"Tool {tool['name']} removed successfully"}, 200
     else:
-      return {"status": f"there is no tool {name} "}, 200
+      return {"status": f"Tool {tool['name']} not found"}, 404
   except Exception as e:
-    return jsonify({"error": f"Error when removing tool {tool} : {e}"}), 500
+    return jsonify({"error": str(e)}), 500
 
-@app.route('/api/v1/mcp/list',methods=['GET'])
-@require_auth
-async def list_tools():
-  """List avaliable tools"""
-  try:
-    cache_tools = mcp_client.array
-    tools = [mcp_client.array[i]['name'] for i in range(len(mcp_client.array))]
-    return {"status": f"""The cached tools are {cache_tools}
-                      and the binded tools are {tools} """}, 200
-  except Exception as e:
-    return jsonify({"error": f"Error : {e}"}), 500
-
-@app.route('/api/v1/mcp/bind',methods=['POST'])
-@require_auth
-async def bind_tools():
-  """Bind the available tools from MCP client to the LLM.
-
-  Returns:
-      dict: A dictionary with the status message and code.
-  """
-  try:
-    tools = mcp_client.tools
-    llm.bind_tools(tools=tools)
-    return {"status": f"tools {tools} were sucessfully binded"}, 200
-  except Exception as e:
-    return jsonify({"error": f"Error while bindding tools {tools}: {e}"}), 500
-
+@app.route("/api/v1/mcp/list", methods=["GET"])
+def list_tools():
+  """List the tools from the agent configuration file"""
+  config = agent_menager.load_config()
+  return {"tools": config.get("tools", [])}, 200
 
 def register_with_registry():
   """Register the agent with the registry by sending agent details."""
   payload = {"agent_id": AGENT_ID, "base_url": AGENT_BASE_URL, "tools": TOOLS_SCHEMA, "secret_token": AGENT_SECRET_TOKEN}
   try:
     requests.post(f"{REGISTRY_BASE_URL}/register", json=payload,timeout=5).raise_for_status()
-    print(f"AI_GUIDE_AGENT ({AGENT_ID}): Registro/Heartbeat enviado com sucesso para o Registry!")
+    print(f"AGENT ({AGENT_ID}): Registro/Heartbeat enviado com sucesso para o Registry!")
   except requests.exceptions.RequestException as e:
-    print(f"AI_GUIDE_AGENT ({AGENT_ID}): Falha no registro/heartbeat. Erro: {e}")
+    print(f"AGENT ({AGENT_ID}): Falha no registro/heartbeat. Erro: {e}")
 
 def deregister_from_registry():
   """Deregister the agent from the registry."""
   try:
     requests.post(f"{REGISTRY_BASE_URL}/deregister", json={"agent_id": AGENT_ID}, timeout=2)
   except requests.exceptions.RequestException as e:
-    print(f"AI_GUIDE_AGENT ({AGENT_ID}): Falha ao desregistrar. Erro: {e}")
+    print(f"AGENT ({AGENT_ID}): Falha ao desregistrar. Erro: {e}")
 
 def heartbeat_task():
   """
