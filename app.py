@@ -1,3 +1,5 @@
+# app.py (versão atualizada para lidar com duplicados)
+
 import streamlit as st
 import chroma_functions as cf
 from indexing import Splitter
@@ -6,14 +8,12 @@ import inspect
 import nltk
 from sentence_transformers import SentenceTransformer
 import PyPDF2
+nltk.download("punkt")
 
 # --- 1. Page Configuration ---
 st.set_page_config(page_title="Chroma Manager", layout="wide")
-
 st.title("🤖 Document Manager for ChromaDB")
 st.write("Upload, process, and add PDF documents to your ChromaDB collections.")
-nltk.download("punkt")
-   
 
 # --- 2. Starting Services ---
 @st.cache_resource
@@ -34,7 +34,6 @@ if client is None:
     st.stop()
 
 # --- 3. Dynamic Method Discovery ---
-# Maps technical function names to user-friendly names for the UI
 METHOD_NAMES = {
     "equal_chunks": "Fixed Size (Langchain)",
     "unstructured_chunks": "Structured (Unstructured)",
@@ -42,7 +41,6 @@ METHOD_NAMES = {
     "changing_decision": "Semantic (Exponential)"
 }
 
-# Discovers available methods from the Splitter class
 available_methods = [
     name for name, func in inspect.getmembers(splitter, predicate=inspect.ismethod)
     if name in METHOD_NAMES and not name.startswith('_')
@@ -51,7 +49,6 @@ available_methods = [
 # --- 4. Sidebar for Collection Management ---
 st.sidebar.header("🗂️ Collection Management")
 try:
-    # Corrigido para usar 'cf.list_all_collections'
     collection_list = cf.list_all_collections(client)
 except Exception as e:
     st.sidebar.error("Error listing collections.")
@@ -71,7 +68,6 @@ else:
     if st.sidebar.button("Create Collection"):
         if new_collection_name and new_collection_name not in collection_list:
             try:
-                # Corrigido para usar 'cf.create_collection'
                 cf.create_collection(client, new_collection_name)
                 st.sidebar.success(f"Collection '{new_collection_name}' created!")
                 st.rerun()
@@ -111,7 +107,6 @@ else:
     )
     technical_method = next(key for key, value in METHOD_NAMES.items() if value == selected_method_friendly)
 
-    # --- Dynamic parameters based on the chosen method ---
     params = {}
     st.subheader("Method Parameters")
     if technical_method == "equal_chunks":
@@ -158,19 +153,24 @@ else:
                         documents = processing_function(**params)
 
                     if documents:
-                        # Corrigido para usar 'cf.add_documents'
-                        cf.add_documents(collection, documents, file.name)
-                        st.write(f"  > File '{file.name}' processed and added successfully.")
+                        result = cf.add_documents(collection, documents, file.name)
+
+          
+                        if result is None:
+                            st.warning(f"  > File '{file.name}' already exists in this collection. Skipped.")
+                        else:
+                            st.write(f"  > File '{file.name}' processed and added successfully.")
                     else:
                         st.warning(f"No text extracted from '{file.name}'.")
 
                     os.remove(temp_path)
 
                 progress_bar.progress(1.0, text="Process complete!")
-                st.success("All files were processed and added to the collection!")
+                st.success("All files were processed!")
 
             except Exception as e:
                 st.error(f"An error occurred during processing: {e}")
                 st.exception(e)
         elif not uploaded_files:
             st.warning("Please upload at least one file.")
+

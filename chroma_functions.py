@@ -35,6 +35,11 @@ def add_documents(collection, documents, source_name):
     ids = [f"id_{source_name}_{current_count + i}" for i, _ in enumerate(documents)]
     metadatas = [{"source": source_name} for _ in documents]
 
+    existing = collection.get(where={"source": source_name})
+    if existing['ids']:
+      print(f"The pdf {source_name} already exist in the {collection}")
+      return None
+      
     collection.add(
         ids=ids,
         documents=documents,
