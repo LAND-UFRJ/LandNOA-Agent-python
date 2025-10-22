@@ -16,7 +16,7 @@ MODEL = os.getenv('OPENAI_MODEL')
 
 client = chromadb.HttpClient(host=CHROMA_URL,port=CHROMA_PORT)
 
-llm = ChatOpenAI(base_url=OPENAI_URL,MODEL=MODEL,api_key='')
+llm = ChatOpenAI(base_url=OPENAI_URL,MODEL=MODEL,api_key=OPENAI_KEY)
 
 class Retriever():
   """Class that has the rertieval functions"""

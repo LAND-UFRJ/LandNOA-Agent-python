@@ -5,7 +5,6 @@ source .venv/bin/activate
 python main.py &
 
 # Run the adk command
-adk api_server --host 0.0.0.0 --port 12000 --a2a &
-
+python3 agente/root_agent.py
 # Wait for both to finish (optional, keeps script alive)
 wait

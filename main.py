@@ -4,24 +4,23 @@ import threading
 import atexit
 import requests
 from pathlib import Path
-from Utils import agent_menager
+from utils import agent_menager
 from functools import wraps
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from chromadb import HttpClient
-from Utils.indexing import Splitter
+from utils.indexing import Splitter
 
 load_dotenv()
 
 #####################################################################################
-#Onde parei: Funções de splitting só aceitam pdf, tem que poder aceitar texto puro tb.
 #Onde parei: Endpoints para poder manipular (atualmente so penso em adicionar) coleções
 #Onde parei: metricas (prometheus) de avaliação de do sistema (tokens, tempo ligado,requests recebidas)
 #Possíveis amelhoramentos: Monitorar conversas (MongoDB), Validação do RAG, Fazer interface (que de para manipular RAG e parametros como um todo)
 #Administrção de Sessão
 #####################################################################################
 
-AGENT_PATH = Path("agents/root_agent/agent.py")
+AGENT_PATH = Path("agente   /agente.py")
 
 AGENT_ID = os.getenv("AGENT_ID")
 AGENT_SECRET_TOKEN = os.getenv("AGENT_SECRET_TOKEN")

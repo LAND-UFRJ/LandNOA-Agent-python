@@ -1,42 +1,68 @@
 import PyPDF2
+import os
+from dotenv import load_dotenv
+from pathlib import Path
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from unstructured.partition.pdf import partition_pdf
-import nltk
 from sklearn.metrics.pairwise import cosine_similarity
+from langchain_ollama import OllamaEmbeddings
+import re
 
-nltk.download("punkt")
+load_dotenv(dotenv_path=Path(__file__).parent / '.env')
+
+OPENAI_URL = str(os.getenv('OPENAI_API_BASE'))[:-2]
+
+embedder = OllamaEmbeddings(base_url=OPENAI_URL,model='llama3.2:1b')
+
+def extract_from_pdf(file_path:str) -> str:
+  """Extracts the text from PDFs"""
+  text = ""
+  with open(file_path, "rb") as file:
+    reader = PyPDF2.PdfReader(file)
+    for page in reader.pages:
+      page_text = page.extract_text()
+      if page_text:
+        text += page_text
+  return text
+
+def embbed(string:str) -> list[float]:
+  """MAkes the embedding of a string"""
+  return embedder.embed_query(string)
+
+def split_into_sentences(text: str) -> list[str]:
+  """Splits a string into a list of sentences using regex."""
+  sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+  return [s.strip() for s in sentences if s.strip()]
+
 
 class Splitter():
   """A class that has text splitting functions"""
   def __init__(self):
     pass
-  def equal_chunks(self,file_path:str,
-                   chunck_size:int,
-                   chunk_overlap:int) -> list[str]:
-    """Extract text from a PDF file and split it into equal-sized chunks.
+  def equal_chunks(self, text: str,
+                    chunk_size: int,
+                    chunk_overlap: int) -> list[str]:
+    """Split text into equal-sized chunks, handling both PDF files and plain text strings.
     Args:
-        file_path (str): The path to the PDF file to process.
+        input (str): Either a file path to a PDF or a plain text string.
+        chunk_size (int): The size of each chunk.
+        chunk_overlap (int): The overlap between chunks.
     Returns:
         list[str]: A list of text chunks.
     """
-    text = ""
-    with open(file_path, "rb") as file:
-      reader = PyPDF2.PdfReader(file)
-      for page in reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-          text += page_text
-      text_splitter = RecursiveCharacterTextSplitter(
-      chunk_size = chunck_size,
-      chunk_overlap = chunk_overlap,
-      length_function = len,
-      is_separator_regex= False,
-      )
-    chunk = text_splitter.create_documents([text])
-    documents = []
-    for c in chunk:
-      documents.append(c.page_content)
+    if text.endswith('.pdf') and os.path.isfile(text):
+      text = extract_from_pdf(text)
+    
+    text_splitter = RecursiveCharacterTextSplitter(
+      chunk_size=chunk_size,
+      chunk_overlap=chunk_overlap,
+      length_function=len,
+      is_separator_regex=False,
+    )
+    chunks = text_splitter.create_documents([text])
+    documents = [c.page_content for c in chunks]
     return documents
+  
 
   # Function to return chunks usign usntructured library
   def unstructured_chunks(self,file_path:str)->list[str]:
@@ -56,12 +82,12 @@ class Splitter():
     for c in raw_chunks:
       documents.append(c.text)
       return documents
+    
   # Functions to return semantic chunks
   def simple_decision(self,
                       start_limit:float,
                       y:float,
-                      sentences:list[str],
-                      all_embeddings)->list[str]:
+                      text:str)->list[str]:
     """Groups sentences using a linearly increasing similarity threshold.
       Args:
           start_limit (float): The initial similarity threshold (e.g., 0.7).
@@ -72,6 +98,10 @@ class Splitter():
           list[str]: A list of cohesive text chunks.
       """
     chunks = []
+    if text.endswith('.pdf') and os.path.isfile(text):
+      text = extract_from_pdf(text)
+    sentences = split_into_sentences(text)
+    all_embeddings = [embbed(sentence) for sentence in sentences]
     i = 0
     while i < (len(sentences)):
       chunk_raw = sentences[i]
@@ -97,8 +127,7 @@ class Splitter():
   def changing_decision(self,
                         start_limit:float,
                         y:float,
-                        sentences:list[str],
-                        all_embeddings) -> list[str]:
+                        text:str) -> list[str]:
     """Groups sentences using an exponentially increasing similarity threshold.
       Args:
           start_limit (float): The initial similarity threshold (e.g., 0.7).
@@ -110,6 +139,10 @@ class Splitter():
           list[str]: A list of cohesive text chunks.
       """
     chunks = []
+    if text.endswith('.pdf') and os.path.isfile(text):
+      text = extract_from_pdf(text)
+    sentences = split_into_sentences(text)
+    all_embeddings = [embbed(sentence) for sentence in sentences]
     i = 0
     while i < (len(sentences)):
       chunk_raw = sentences[i]

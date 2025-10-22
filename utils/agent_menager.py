@@ -4,7 +4,7 @@ from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, SseConnectionParams
 
-CONFIG_PATH = Path(__file__).resolve().parent.parent/"teste_agente/config.json"
+CONFIG_PATH = Path(__file__).resolve().parent.parent/"agente/config.json"
 
 def load_config():
   """Loads the configuration of the agent"""
@@ -28,7 +28,7 @@ def build_agent() -> LlmAgent:
     for tool in config.get("tools", [])
   ]
   return LlmAgent(
-    model=LiteLlm(model=model_name),
+    model=LiteLlm(model=f'openai/{model_name}'),
     name=agent_name,
     tools=tools
   )
