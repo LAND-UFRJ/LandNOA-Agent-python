@@ -1,4 +1,5 @@
 import json
+from .agent_prompt import AGENT_PROMPT
 from pathlib import Path
 from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
@@ -30,7 +31,8 @@ def build_agent() -> LlmAgent:
   return LlmAgent(
     model=LiteLlm(model=f'openai/{model_name}'),
     name=agent_name,
-    tools=tools
+    tools=tools,
+    instruction=AGENT_PROMPT
   )
 
 def add_tool(name: str, url: str):

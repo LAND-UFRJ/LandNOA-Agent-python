@@ -17,3 +17,4 @@ langchain_text_splitters
 langchain_openai
 langchain_ollama
 prometheus_client
+fastmcp

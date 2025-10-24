@@ -1,8 +1,4 @@
 import os
-import time
-import threading
-import atexit
-import requests
 from pathlib import Path
 from utils import agent_menager
 from functools import wraps
@@ -12,7 +8,7 @@ from chromadb import HttpClient
 from utils.indexing import Splitter
 
 load_dotenv()
-
+#http:///.well-known/agent.json
 #####################################################################################
 #Onde parei: Endpoints para poder manipular (atualmente so penso em adicionar) coleções
 #Onde parei: metricas (prometheus) de avaliação de do sistema (tokens, tempo ligado,requests recebidas)
@@ -20,32 +16,19 @@ load_dotenv()
 #Administrção de Sessão
 #####################################################################################
 
-AGENT_PATH = Path("agente   /agente.py")
+AGENT_PATH = Path("agente/root_agent.py")
 
-AGENT_ID = os.getenv("AGENT_ID")
 AGENT_SECRET_TOKEN = os.getenv("AGENT_SECRET_TOKEN")
 AGENT_BASE_URL = os.getenv("AGENT_BASE_URL")
-REGISTRY_BASE_URL = os.getenv("REGISTRY_BASE_URL")
 FLASK_RUN_PORT = int(os.getenv("FLASK_RUN_PORT", '8010'))
-chorma_url = os.getenv('CHROMADB_URL')
-chorma_port = os.getenv('CHROMADB_PORT')
+chroma_url = os.getenv('CHROMADB_URL')
+chroma_port = int(os.getenv('CHROMADB_PORT'))
 
 app = Flask(__name__)
 
-#todo:Inserir ferramentas MCP aqui tb
-TOOLS_SCHEMA = [
-    {
-        "name": "responder_como_guia_de_ia",
-        "description": """Use esta ferramenta para responder perguntas sobre o
-          uso de IA de maneiras éticas e adequadas à uma 
-          educação saudável e responsável.""",
-        "parameters": {"pergunta": "string"}
-    }
-]
-
 splitter = Splitter()
 
-chroma_client = HttpClient(host=chorma_url,port=chorma_port)
+chroma_client = HttpClient(host=chroma_url,port=chroma_port)
 
 def require_auth(f):
   """
@@ -84,7 +67,7 @@ def list_collections():
   """
   try:
     collections = chroma_client.list_collections()
-    return {'result':f'The Chorma Collections avaliable are {collections}'},200
+    return {'result':f'The chroma Collections avaliable are {collections}'},200
   except Exception as e:
     return jsonify({"error":f"Error while listing chroma collections: {e}"}), 500
 
@@ -105,7 +88,7 @@ def create_collections():
       return {'result':f'There is already a chroma collection with the name {name}'},200
     else:
       chroma_client.create_collection(name=name)
-      return {'result':f'Created Chorma Collections {name}'},200
+      return {'result':f'Created chroma Collections {name}'},200
   except Exception as e:
     return jsonify({"error": f"Error while creating chroma collections: {e}"}), 500
 
@@ -161,35 +144,5 @@ def list_tools():
   config = agent_menager.load_config()
   return {"tools": config.get("tools", [])}, 200
 
-def register_with_registry():
-  """Register the agent with the registry by sending agent details."""
-  payload = {"agent_id": AGENT_ID, "base_url": AGENT_BASE_URL, "tools": TOOLS_SCHEMA, "secret_token": AGENT_SECRET_TOKEN}
-  try:
-    requests.post(f"{REGISTRY_BASE_URL}/register", json=payload,timeout=5).raise_for_status()
-    print(f"AGENT ({AGENT_ID}): Registro/Heartbeat enviado com sucesso para o Registry!")
-  except requests.exceptions.RequestException as e:
-    print(f"AGENT ({AGENT_ID}): Falha no registro/heartbeat. Erro: {e}")
-
-def deregister_from_registry():
-  """Deregister the agent from the registry."""
-  try:
-    requests.post(f"{REGISTRY_BASE_URL}/deregister", json={"agent_id": AGENT_ID}, timeout=2)
-  except requests.exceptions.RequestException as e:
-    print(f"AGENT ({AGENT_ID}): Falha ao desregistrar. Erro: {e}")
-
-def heartbeat_task():
-  """
-  Função será executada em segundo plano para enviar o re-registro periódico.
-  """
-  while True:
-    time.sleep(40)
-    register_with_registry()
-
-
 if __name__ == '__main__':
-  atexit.register(deregister_from_registry)
-  time.sleep(2)
-  register_with_registry()
-  heartbeat_thread = threading.Thread(target=heartbeat_task, daemon=True)
-  heartbeat_thread.start()
   app.run(port=FLASK_RUN_PORT, host='0.0.0.0')

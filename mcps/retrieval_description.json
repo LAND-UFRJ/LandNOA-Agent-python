@@ -1,0 +1,56 @@
+{
+    "sentence_window_retrieval": {
+      "description": "Implements the SWR (Sentence Window Retrieval) strategy. This function finds the most relevant document and also retrieves the documents that were physically stored next to it (before and after), assuming they might contain relevant context.",
+      "output_format": {
+          "collection": "str",
+          "content": "list",
+          "distances": "list",
+          "parameters": "dict"
+        }
+    },
+    "multi_query": {
+      "description": "Generates multiple variations of a query using an LLM to broaden the search. This technique helps find documents that the original query might have missed, improving the chance of finding relevant information (recall).",
+      "output_format": {
+          "collection": "str",
+          "content": "list",
+          "distances": "list",
+          "parameters": "dict"
+      }
+    },
+    "top_k": {
+      "description": "Performs a simple vector search and returns the top 'k' most similar docs. This is the most basic form of Retrieval-Augmented Generation (RAG).",
+      "output_format": {
+        "collection": "str",
+        "content": "list",
+        "distances": "list",
+        "parameters": "dict"
+      }
+    },
+    "top_k_reranker": {
+      "description": "Implements the 'retrieve-then-rerank' strategy. First, it retrieves a larger number of documents (high_k), and then uses a more accurate reranker MODEL to find the top 5 best matches among them.",
+      "output_format": {
+        "collection": "str",
+        "content": "list",
+        "distances": "list",
+        "parameters": "dict"
+        }
+    },
+    "sentence_window_retriever_reranker": {
+        "description": "Implements the SWR(Sentence Window Retrieval) strategy, with ReRanker. This function finds the most relevant document and also retrieves the documents that were physically stored next to it (before and after), assuming they might contain relevant context. Its necessary to use higher variables with ReRanker.",
+        "output_format": {
+            "collection": "str",
+            "content": "list",
+            "distances": "list",
+            "parameters": "dict"
+        }
+    },
+    "multi_query_reranker": {
+        "description": "Generates multiple variations of a query using an LLM to broaden the search. This technique helps find documents that the original query might have missed, improving the chance of finding relevant information (recall). Now the final docs are passing through a ReRanker MODEL, its recommend higher returns to work better with ReRanker MODELs.",
+        "output_format": {
+            "collection": "str",
+            "content": "list",
+            "distances": "list",
+            "parameters": "dict"
+        }
+    }
+}

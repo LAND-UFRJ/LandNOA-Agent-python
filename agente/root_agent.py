@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 root_agent = build_agent()
 
-a2a_app = to_a2a(root_agent, port=8001,host="10.246.20.6")
+a2a_app = to_a2a(root_agent, port=8001,host="10.246.20.4")
 
 a2a_app.add_middleware(
   CORSMiddleware,
@@ -22,5 +22,4 @@ a2a_app.add_middleware(
 )
 
 if __name__ == '__main__':
-  uvicorn.run(a2a_app, host="10.246.20.6", port=8001)
-  
+  uvicorn.run(a2a_app, host="10.246.20.4", port=8001)

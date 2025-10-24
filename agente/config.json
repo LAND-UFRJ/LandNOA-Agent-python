@@ -1,6 +1,7 @@
 {
-  "model":"llama3.2:1b",
+  "model":"qwen3:14b",
   "agent_name": "hello_there",
   "tools":[
+    {"name":"rag","url":"http://localhost:11000/sse"}
   ]
 }

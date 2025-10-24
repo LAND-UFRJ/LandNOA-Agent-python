@@ -187,18 +187,18 @@ class Retriever():
       index = ids.index(i)
       indexes = ids[max(index-n_around,0):min(index+n_around,len(ids))]
       all_ids.extend(indexes)
-    print(f"ALL_IDS HERE:{all_ids}")
+    #print(f"ALL_IDS HERE:{all_ids}")
     single_ids = list(set(all_ids))
-    print(f"ALL_SINGLE IDS HERE:{single_ids}")
+    #print(f"ALL_SINGLE IDS HERE:{single_ids}")
     final.append(collection.get(ids=single_ids)['documents'])
-    print(final[0])
+    #print(final[0])
     touples = [[query,d]for d in final[0]]
     scores = reranker.compute_score(touples)
     indices_maiores = sorted(range(len(scores)),
                               key=lambda i: scores[i],
                               reverse=True)[:5]
-    print(indices_maiores)
-    print(scores)
+    #print(indices_maiores)
+    #print(scores)
     rag = []
     for i in indices_maiores:
       rag.append(final[0][i])
