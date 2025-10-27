@@ -3,16 +3,36 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from unstructured.partition.pdf import partition_pdf
 import nltk
 from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer 
+import re
 
 nltk.download("punkt")
+model = SentenceTransformer('all-MiniLM-L6-v2')  #Chromadb default model
+
+def extract_from_pdf(file_path:str) -> str:
+  """Extracts the text from PDFs"""
+  text = ""
+  with open(file_path, "rb") as file:
+    reader = PyPDF2.PdfReader(file)
+    for page in reader.pages:
+      page_text = page.extract_text()
+      if page_text:
+        text += page_text
+  return text
+
+
+def split_sentences_with_nltk(text: str) -> list[str]:
+    """Uses NLKT for most precise sentence spliting."""
+    return nltk.tokenize.sent_tokenize(text)
+
 
 class Splitter():
   """A class that has text splitting functions"""
   def __init__(self):
     pass
   def equal_chunks(self,file_path:str,
-                   chunck_size:int,
-                   chunk_overlap:int) -> list[str]:
+                   chunck_size:int = 750,
+                   chunk_overlap:int= 50) -> list[str]:
     """Extract text from a PDF file and split it into equal-sized chunks.
     Args:
         file_path (str): The path to the PDF file to process.
@@ -57,11 +77,9 @@ class Splitter():
       documents.append(c.text)
     return documents
   # Functions to return semantic chunks
-  def simple_decision(self,
-                      start_limit:float,
-                      y:float,
-                      sentences:list[str],
-                      all_embeddings)->list[str]:
+  def simple_decision(self,file_path,
+                      start_limit:float =0.5,
+                      y:float = 0.1,)->list[str]:
     """Groups sentences using a linearly increasing similarity threshold.
       Args:
           start_limit (float): The initial similarity threshold (e.g., 0.7).
@@ -71,6 +89,9 @@ class Splitter():
       Returns:
           list[str]: A list of cohesive text chunks.
       """
+    text = extract_from_pdf(file_path)
+    sentences = split_sentences_with_nltk(text)
+    all_embeddings = model.encode(sentences)
     chunks = []
     i = 0
     while i < (len(sentences)):
@@ -94,11 +115,9 @@ class Splitter():
       i = i + counter
     return chunks
 
-  def changing_decision(self,
-                        start_limit:float,
-                        y:float,
-                        sentences:list[str],
-                        all_embeddings) -> list[str]:
+  def changing_decision(self,file_path,
+                        start_limit:float = 0.3,
+                        y:float =0.75,) -> list[str]:
     """Groups sentences using an exponentially increasing similarity threshold.
       Args:
           start_limit (float): The initial similarity threshold (e.g., 0.7).
@@ -109,6 +128,9 @@ class Splitter():
       Returns:
           list[str]: A list of cohesive text chunks.
       """
+    text = extract_from_pdf(file_path)
+    sentences = split_sentences_with_nltk(text)
+    all_embeddings = model.encode(sentences)
     chunks = []
     i = 0
     while i < (len(sentences)):
