@@ -9,12 +9,13 @@ load_dotenv()
 
 openai_url = os.getenv('OPENAI_BASE_URL')
 openai_key = os.getenv('OPENAI_KEY')
-chroma_url = os.getenv('CHROMA_URL')
+chroma_host = os.getenv('CHROMADB_HOST')
+chroma_port = os.getenv('CHROMADB_PORT')
 model = os.getenv('OPENAI_MODEL')
 
-client = chromadb.HttpClient(host=chroma_url)
+client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
 
-llm = ChatOpenAI(base_url=openai_url,model=model,api_key='')
+#llm = ChatOpenAI(base_url=openai_url,model=model,api_key='')
 
 class Retriever():
   """Class that has the rertieval functions"""
