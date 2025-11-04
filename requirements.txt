@@ -1,6 +1,6 @@
 chromadb==1.1.1
 transformers==4.57.0
-python-dotenv==1.0.0
+python-dotenv==1.1.0
 google-adk
 flask
 PyPDF2
@@ -17,4 +17,5 @@ langchain_text_splitters
 langchain_openai
 langchain_ollama
 prometheus_client
-fastmcp
+fastmcp==2.12.5
+streamlit

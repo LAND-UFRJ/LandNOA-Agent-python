@@ -15,7 +15,7 @@ def load_config():
     return json.load(f)
 
 def save_config(config: dict):
-  """Saves the configuration of the agent"""
+  """Saves the configuration of the agent"""  
   with open(CONFIG_PATH, "w",encoding="UTF-8") as f:
     json.dump(config, f, indent=2)
 
