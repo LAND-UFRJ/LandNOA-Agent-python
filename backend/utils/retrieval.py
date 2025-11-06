@@ -1,21 +1,17 @@
-import os
 import chromadb
-from dotenv import load_dotenv
-from pathlib import Path
+import time
 from FlagEmbedding import FlagReranker
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 from typing import Dict, List, Any
-import time
+from sqlite_functions import get_config
 
-load_dotenv(dotenv_path=Path(__file__).parent / '.env')
 
-OPENAI_URL = os.getenv('OPENAI_BASE_URL')
-OPENAI_KEY = os.getenv('OPENAI_KEY')
-CHROMA_URL = os.getenv('CHROMADB_HOST')
-print(CHROMA_URL)
-CHROMA_PORT = int(os.getenv('CHROMADB_PORT'))
-MODEL = os.getenv('OPENAI_MODEL')
+OPENAI_URL = get_config('openai_baseurl')
+OPENAI_KEY = get_config('openai_api_key')
+CHROMA_URL = get_config('chroma_url')
+CHROMA_PORT = int(get_config('chroma_port'))
+MODEL = get_config('model')
 
 client = chromadb.HttpClient(host=CHROMA_URL,port=CHROMA_PORT)
 
@@ -29,7 +25,7 @@ class Retriever():
   def get_reranker(self):
     """gets the reranker"""
     if self.re_ranker is None:
-      RE_RANKER = FlagReranker('BAAI/bge-reranker-base',
+      self.re_ranker = FlagReranker('BAAI/bge-reranker-base',
                               use_fp16=True,
                               normalize=True)
     return self.re_ranker
@@ -49,7 +45,7 @@ class Retriever():
     else:
       indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
       return [documents[i] for i in indices], [scores[i] for i in indices]
-    
+
   def sentence_window_retrieval(self,
                                 query: str,
                                 collection_name: str,
