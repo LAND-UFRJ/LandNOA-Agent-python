@@ -1,54 +1,47 @@
-import json
-from .agent_prompt import AGENT_PROMPT
-from pathlib import Path
 from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, SseConnectionParams
+import sqlite_functions as sf
+import retrieval
 
-CONFIG_PATH = Path(__file__).resolve().parent.parent/"agente/config.json"
-
-def load_config():
-  """Loads the configuration of the agent"""
-  if not CONFIG_PATH.exists():
-    raise FileNotFoundError(f"Missing config file: {CONFIG_PATH}")
-  with open(CONFIG_PATH, "r",encoding="UTF-8") as f:
-    return json.load(f)
-
-def save_config(config: dict):
-  """Saves the configuration of the agent"""  
-  with open(CONFIG_PATH, "w",encoding="UTF-8") as f:
-    json.dump(config, f, indent=2)
+def _resolve_rag_tool():
+  """Resolve the RAG tool object named in the DB/config.
+  The value returned by get_rag_tool() should match an attribute exported
+  by the retrieval module or an attribute of retrieval.Retriever.
+  If it's callable/class, instantiate it.
+  """
+  name = sf.get_rag_tool()
+  if hasattr(retrieval, name):
+    tool_obj = getattr(retrieval, name)
+  elif hasattr(retrieval, "Retriever") and hasattr(retrieval.Retriever, name):
+    tool_obj = getattr(retrieval.Retriever, name)
+  else:
+    raise ImportError(f"RAG tool '{name}' not found in retrieval module")
+  return tool_obj() if callable(tool_obj) else tool_obj
 
 def build_agent() -> LlmAgent:
   """Build the LlmAgent based on the current config.json."""
-  config = load_config()
-  model_name = config["model"]
-  agent_name = config["agent_name"]
+  model_name = sf.get_config("model")
+  agent_name = sf.get_config("agent_name")
   tools = [
     McpToolset(connection_params=SseConnectionParams(url=tool["url"]))
-    for tool in config.get("tools", [])
+    for tool in sf.get_tools()
   ]
+  tools.append(_resolve_rag_tool())
   return LlmAgent(
     model=LiteLlm(model=f'openai/{model_name}'),
     name=agent_name,
     tools=tools,
-    instruction=AGENT_PROMPT
+    instruction=sf.get_prompt()
   )
 
-def add_tool(name: str, url: str):
+def add_tool(name: str, url: str,description:str):
   """Add a tool and update config.json."""
-  config = load_config()
-  if any(t["name"] == name for t in config["tools"]):
+  tools = sf.get_tools()
+  if any(t["name"] == name for t in tools["tools"]):
     raise ValueError(f"Tool {name} already exists.")
-  config["tools"].append({"name": name, "url": url})
-  save_config(config)
+  sf.add_tool_sqlite(name,url,description)
 
 def remove_tool(name: str) -> bool:
   """Remove a tool by name."""
-  config = load_config()
-  before = len(config["tools"])
-  config["tools"] = [t for t in config["tools"] if t["name"] != name]
-  if len(config["tools"]) == before:
-    return False
-  save_config(config)
-  return True
+  sf.remove_tool_sql(name)

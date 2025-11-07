@@ -1,7 +1,0 @@
-{
-  "model":"qwen3:14b",
-  "agent_name": "hello_there",
-  "tools":[
-    {"name":"rag","url":"http://localhost:11000/sse"}
-  ]
-}

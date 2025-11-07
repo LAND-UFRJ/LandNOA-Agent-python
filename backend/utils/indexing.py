@@ -20,11 +20,9 @@ def extract_from_pdf(file_path:str) -> str:
         text += page_text
   return text
 
-
 def split_sentences_with_nltk(text: str) -> list[str]:
   """Uses NLKT for most precise sentence spliting."""
   return nltk.tokenize.sent_tokenize(text)
-
 
 class Splitter():
   """A class that has text splitting functions"""
