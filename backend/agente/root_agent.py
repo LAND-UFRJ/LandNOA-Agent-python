@@ -1,16 +1,21 @@
-# agent/agent.py
-import uvicorn
 import sys
+import os
 from pathlib import Path
+import uvicorn
 from utils.agent_menager import build_agent
 from google.adk.a2a.utils.agent_to_a2a import to_a2a
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
+load_dotenv()
+
+IP = os.getenv("IP")
+PORT = int(os.getenv("PORT"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 root_agent = build_agent()
 
-a2a_app = to_a2a(root_agent, port=8001,host="10.246.3.42")
+a2a_app = to_a2a(root_agent, port=PORT,host=IP)
 
 a2a_app.add_middleware(
   CORSMiddleware,
@@ -22,4 +27,4 @@ a2a_app.add_middleware(
 )
 
 if __name__ == '__main__':
-  uvicorn.run(a2a_app, host="10.246.3.42", port=8001)
+  uvicorn.run(a2a_app, host=IP, port=PORT)

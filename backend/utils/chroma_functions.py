@@ -1,12 +1,14 @@
-import chromadb
+import os
 import json
-from sqlite_functions import get_config
-# --- Functions to manage ChromaDB collections
+import chromadb
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def connect_chroma():
   """Connects to ChromaDB using credentials from environment variables."""
-  host = get_config('chroma_url')
-  port = int(get_config('chroma_port'))
+  host = os.getenv("CHROMA_HOST")
+  port = int(os.getenv("CHROMA_PORT"))
   if not host or not port:
     raise ValueError("chroma_url and chroma_port must be set in the interface")
   client = chromadb.HttpClient(host=host, port=port)

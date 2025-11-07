@@ -1,16 +1,19 @@
-import chromadb
+import os
 import time
+from typing import Dict, List, Any
+from sqlite_functions import get_config
+import chromadb
 from FlagEmbedding import FlagReranker
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
-from typing import Dict, List, Any
-from sqlite_functions import get_config
+from dotenv import load_dotenv
 
+load_dotenv()
 
 OPENAI_URL = get_config('openai_baseurl')
 OPENAI_KEY = get_config('openai_api_key')
-CHROMA_URL = get_config('chroma_url')
-CHROMA_PORT = int(get_config('chroma_port'))
+CHROMA_URL = os.getenv("CHROMA_HOST")
+CHROMA_PORT = int(os.getenv("CHROMA_PORT"))
 MODEL = get_config('model')
 
 client = chromadb.HttpClient(host=CHROMA_URL,port=CHROMA_PORT)
