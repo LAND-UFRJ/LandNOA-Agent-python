@@ -1,6 +1,7 @@
 import os
 import time
 from typing import Dict, List, Any
+from pathlib import Path
 from sqlite_functions import get_config
 import chromadb
 from FlagEmbedding import FlagReranker
@@ -8,7 +9,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).parent / '.env')
 
 OPENAI_URL = get_config('openai_baseurl')
 OPENAI_KEY = get_config('openai_api_key')
