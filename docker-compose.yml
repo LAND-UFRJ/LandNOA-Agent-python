@@ -1,0 +1,30 @@
+services:
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: chroma
+    ports:
+      - "8000:8000"            # optional; can remove if you don't need host access
+    volumes:
+      - ./chroma-data:/data
+    command: ["run", "--host", "localhost", "--port", "8000"]
+    restart: unless-stopped
+
+  app1:
+    build: .
+    depends_on:
+      - chroma
+    environment:
+      - CHROMA_HOST=localhost
+      - CHROMA_PORT=8000
+    command: ["python", "backend/agente/root_agent.py"]
+    restart: unless-stopped
+
+  app2:
+    build: .
+    depends_on:
+      - chroma
+    environment:
+      - CHROMA_HOST=localhost
+      - CHROMA_PORT=8000
+    command: ["streamlit","run", "frontend/app.py"]
+    restart: unless-stopped

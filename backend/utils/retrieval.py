@@ -2,7 +2,7 @@ import os
 import time
 from typing import Dict, List, Any
 from pathlib import Path
-from sqlite_functions import get_config
+from .sqlite_functions import get_config
 import chromadb
 from FlagEmbedding import FlagReranker
 from langchain_core.messages import SystemMessage, HumanMessage

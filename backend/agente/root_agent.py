@@ -1,5 +1,8 @@
 import sys
 import os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_root not in sys.path:
+  sys.path.insert(0, project_root)
 from pathlib import Path
 import uvicorn
 from utils.agent_menager import build_agent
@@ -10,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 IP = os.getenv("IP")
-PORT = int(os.getenv("PORT"))
+PORT = int(os.getenv("AGENT_PORT"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 root_agent = build_agent()
