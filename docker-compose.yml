@@ -6,25 +6,25 @@ services:
       - "8000:8000"            # optional; can remove if you don't need host access
     volumes:
       - ./chroma-data:/data
-    command: ["run", "--host", "localhost", "--port", "8000"]
+    command: ["run", "--host", "0.0.0.0", "--port", "8000"]
     restart: unless-stopped
 
-  app1:
+  backend:
     build: .
     depends_on:
       - chroma
     environment:
-      - CHROMA_HOST=localhost
+      - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
-    command: ["python", "backend/agente/root_agent.py"]
+    command: ["sh","-c","until curl -sS http://chroma:8000/ >/dev/null 2>&1; do sleep 1; done; python backend/agente/root_agent.py"]
     restart: unless-stopped
 
-  app2:
+  frontend:
     build: .
     depends_on:
       - chroma
     environment:
-      - CHROMA_HOST=localhost
+      - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
-    command: ["streamlit","run", "frontend/app.py"]
+    command: ["sh","-c","until curl -sS http://chroma:8000/ >/dev/null 2>&1; do sleep 1; done; streamlit run frontend/app.py --server.address 0.0.0.0 --server.port 8501"]
     restart: unless-stopped

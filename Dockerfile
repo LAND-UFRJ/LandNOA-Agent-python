@@ -10,4 +10,6 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
+RUN python initial_config.py
+
 EXPOSE 10000 8501
