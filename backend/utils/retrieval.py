@@ -2,7 +2,7 @@ import os
 import time
 from typing import Dict, List, Any
 from pathlib import Path
-from sqlite_functions import get_config
+from .sqlite_functions import get_config
 import chromadb
 from FlagEmbedding import FlagReranker
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -13,10 +13,11 @@ load_dotenv(dotenv_path=Path(__file__).parent / '.env')
 
 OPENAI_URL = get_config('openai_baseurl')
 OPENAI_KEY = get_config('openai_api_key')
-CHROMA_URL = os.getenv("CHROMA_HOST")
+CHROMA_URL = str(os.getenv("CHROMA_HOST"))
 CHROMA_PORT = int(os.getenv("CHROMA_PORT"))
 MODEL = get_config('model')
 
+print(CHROMA_URL,CHROMA_PORT)
 client = chromadb.HttpClient(host=CHROMA_URL,port=CHROMA_PORT)
 
 llm = ChatOpenAI(base_url=OPENAI_URL,MODEL=MODEL,api_key=OPENAI_KEY)

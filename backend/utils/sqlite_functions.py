@@ -16,6 +16,7 @@ def get_config(variable_name: str) -> str:
   finally:
     conn.close()
 
+#TODO check nisso
 def get_tools():
 # espera uma lista de dicionários com "name" e "url"
   """Getsthe tools config """
@@ -25,7 +26,7 @@ def get_tools():
     cur.execute("SELECT * FROM tools")
     row = cur.fetchone()
     if row is None:
-      raise ValueError("No tools configured")
+      return None
     return row[0]
   except sqlite3.Error as e:
     raise RuntimeError(f"Database error: {e}")
@@ -69,7 +70,7 @@ def get_prompt(prompt_id:int = 0 )->str:
     cur.execute("SELECT * FROM prompts where id = ?",(prompt_id,))
     row = cur.fetchone()
     if row is None:
-      raise ValueError("No prompts configured")
+      return None
     return row[0]
   except sqlite3.Error as e:
     raise RuntimeError(f"Database error: {e}")
@@ -81,7 +82,7 @@ def get_rag_tool() -> str:
   try:
     conn = sqlite3.connect("config.db")
     cur = conn.cursor()
-    cur.execute("SELECT value FROM config where name = retrieval_function")
+    cur.execute("SELECT value FROM config WHERE name = ?", ('retrieval_function',))
     row = cur.fetchone()
     if row is None:
       raise ValueError("No prompts configured")

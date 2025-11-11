@@ -1,11 +1,15 @@
-import streamlit as st
-import utils.chroma_functions as cf
-from utils.indexing import Splitter
-from utils.retrieval import Retriever
 import os
+import sys
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_root not in sys.path:
+  sys.path.insert(0, project_root)
+import streamlit as st
+import backend.utils.chroma_functions as cf
+from backend.utils.indexing import Splitter
+from backend.utils.retrieval import Retriever
 import inspect
 import nltk
-import json 
+import json
 
 nltk.download("punkt")
 

@@ -1,8 +1,8 @@
 from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, SseConnectionParams
-import sqlite_functions as sf
-import retrieval
+from . import sqlite_functions as sf
+from . import retrieval
 
 def _resolve_rag_tool():
   """Resolve the RAG tool object named in the DB/config.
@@ -23,17 +23,29 @@ def build_agent() -> LlmAgent:
   """Build the LlmAgent based on the current config.json."""
   model_name = sf.get_config("model")
   agent_name = sf.get_config("agent_name")
-  tools = [
-    McpToolset(connection_params=SseConnectionParams(url=tool["url"]))
-    for tool in sf.get_tools()
-  ]
-  tools.append(_resolve_rag_tool())
-  return LlmAgent(
+  cache_tools = sf.get_tools()
+  tools = []
+
+  if cache_tools is not None:
+    tools.extend([
+      McpToolset(connection_params=SseConnectionParams(url=tool["url"]))
+      for tool in cache_tools
+    ])
+    tools.append(_resolve_rag_tool())
+  
+  if sf.get_prompt() is None:
+    return LlmAgent(
     model=LiteLlm(model=f'openai/{model_name}'),
     name=agent_name,
     tools=tools,
-    instruction=sf.get_prompt()
   )
+  else:
+    return LlmAgent(
+      model=LiteLlm(model=f'openai/{model_name}'),
+      name=agent_name,
+      tools=tools,
+      instruction=sf.get_prompt()
+    )
 
 def add_tool(name: str, url: str,description:str):
   """Add a tool and update config.json."""
