@@ -1,15 +1,18 @@
-import os
-import sys
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if project_root not in sys.path:
-  sys.path.insert(0, project_root)
 import streamlit as st
 import backend.utils.chroma_functions as cf
-from backend.utils.indexing import Splitter
-from backend.utils.retrieval import Retriever
+import os
 import inspect
 import nltk
-import json
+import backend.utils.sqlite_functions as sq 
+from backend.utils.indexing import Splitter
+
+try:
+    db_conn = sq.connect()
+    sq.create_tables(db_conn) 
+except Exception as e:
+    st.error(f"Falha ao conectar/criar tabelas no SQLite: {e}")
+    st.stop()
+
 
 nltk.download("punkt")
 
@@ -21,23 +24,21 @@ st.write("Upload, process, and add PDF documents to your ChromaDB collections.")
 # --- 2. Starting Services ---
 @st.cache_resource
 def start_services():
-  """Connects to ChromaDB and loads the Splitter and Retriever classes."""
+  """Connects to ChromaDB and loads the Splitter class."""
   try:
     client = cf.connect_chroma()
     splitter = Splitter()
-    retriever = Retriever()
-    return client, splitter, retriever
+    return client, splitter, db_conn
   except Exception as e:
     st.error(f"Could not initialize services. Please check ChromaDB connection. Error: {e}")
     return None, None, None
 
-client, splitter, retriever = start_services() 
+client, splitter, sqlite = start_services()
 if client is None:
   st.stop()
 
 # --- 3. Method Dictionaries ---
-
-# Index Methods
+# (Nenhuma mudança aqui, está perfeito)
 METHOD_NAMES = {
   "equal_chunks": "Fixed Size (Langchain)",
   "unstructured_chunks": "Structured (Unstructured)",
@@ -49,26 +50,14 @@ available_methods = [
   if name in METHOD_NAMES and not name.startswith('_')
 ]
 
-# Retrieval Methods
-RETRIEVAL_METHOD_NAMES = {
-  "top_k": "Top-K",
-  "re_ranker": "Top-K (with Re-Ranker)",
-  "multi_query": "Multi-Query",
-  "multi_query_self.re_ranker": "Multi-Query (with Re-Ranker)",
-  "sentence_window_retrieval": "Sentence Window",
-  "sentence_window_retriever_self.re_ranker": "Sentence Window (with Re-Ranker)"
-}
-available_retrievers = [
-  name for name, func in inspect.getmembers(retriever, predicate=inspect.ismethod)
-  if name in RETRIEVAL_METHOD_NAMES and not name.startswith('_')
-]
 
 # --- 4. Sidebar for Collection Management ---
 st.sidebar.header("Collection Management")
 try:
-  collection_list = cf.list_all_collections(client)
+  # MUDANÇA: Lista de coleções vem do SQLite
+  collection_list = sq.get_all_collections_names(sqlite) 
 except Exception as e:
-  st.sidebar.error("Error listing collections.")
+  st.sidebar.error(f"Error listing collections: {e}")
   collection_list = []
 
 st.sidebar.subheader("Select or Create")
@@ -107,12 +96,20 @@ else:
   if st.sidebar.button("Create Collection"):
     if new_collection_name and new_collection_name not in collection_list:
       try:
-        cf.create_collection_with_info(
-          client=client,
-          collection_name=new_collection_name,
-          index_method=technical_method,
-          parameters=params 
+        # MUDANÇA: Orquestração da criação
+        # 1. Adiciona no SQLite
+        sq.add_collection(
+            conn=sqlite,
+            name=new_collection_name,
+            index_method=technical_method,
+            index_params=params
         )
+        # 2. Cria no Chroma
+        cf.create_collection(
+            client=client,
+            collection_name=new_collection_name
+        )
+        
         st.sidebar.success(f"Collection '{new_collection_name}' created!")
         st.rerun() 
       except Exception as e:
@@ -131,7 +128,12 @@ if collection_list:
   collection_to_delete = st.sidebar.selectbox("Select to delete:", options=[""] + collection_list)
   if collection_to_delete and st.sidebar.button(f"Delete '{collection_to_delete}'"):
     try:
-      client.delete_collection(name=collection_to_delete)
+      # MUDANÇA: Orquestração da deleção
+      # 1. Deleta do Chroma
+      cf.delete_collection(client, collection_to_delete)
+      # 2. Deleta do SQLite
+      sq.delete_collection(sqlite, collection_to_delete)
+      
       st.sidebar.success(f"Collection '{collection_to_delete}' deleted.")
       st.rerun()
     except Exception as e:
@@ -144,10 +146,16 @@ else:
   st.success(f"Working on collection: **{active_collection_name}**")
 
   try:
-    unique_pdfs, infos = cf.show_collection_info(client, active_collection_name)
-    saved_method = infos.get("index_method")
-    saved_params_str = infos.get("parameters", "{}") 
-    saved_params = json.loads(saved_params_str)
+    # MUDANÇA: Pega informações do SQLite
+    collection_details = sq.get_collection_details(sqlite, active_collection_name)
+    pdf_names = sq.get_pdfs_for_collection(sqlite, active_collection_name)
+
+    if not collection_details:
+        st.error(f"Detalhes da coleção '{active_collection_name}' não encontrados no SQLite. Pode haver uma dessincronização.")
+        st.stop()
+
+    saved_method = collection_details.get("index_method")
+    saved_params = collection_details.get("index_params", {}) # Já vem como dict
 
     st.subheader("Collection Info")
     col1, col2 = st.columns(2)
@@ -160,9 +168,8 @@ else:
       else:
         st.text("None")
     with col2:
-      st.markdown(f"**Documents in Collection ({len(unique_pdfs)}):**")
-      if unique_pdfs:
-        pdf_names = [data[0] for data in unique_pdfs if isinstance(data, tuple) and data]
+      st.markdown(f"**Documents in Collection ({len(pdf_names)}):**")
+      if pdf_names:
         st.dataframe(pdf_names, use_container_width=True, hide_index=True, column_config={"value":"File Name"})
       else:
         st.text("No documents added yet.")
@@ -172,109 +179,51 @@ else:
 
   st.divider()
 
-  # --- Tabs Management ---
-  tab1, tab2 = st.tabs(["🗂️ Manage Documents", "🔍 Query Collection"])
+  # --- Adicionar Documentos ---
+  st.header(f"➕ Add New Documents to '{active_collection_name}'")
+  uploaded_files = st.file_uploader("Drag and drop PDF files here", type="pdf", accept_multiple_files=True)
 
-  # Tab 1
-  with tab1:
-    st.header(f"➕ Add New Documents to '{active_collection_name}'")
-    uploaded_files = st.file_uploader("Drag and drop PDF files here", type="pdf", accept_multiple_files=True)
+  if st.button("Process and Add to Collection", type="primary"):
+    if uploaded_files and active_collection_name:
+      try:
+        collection = cf.get_collection(client, active_collection_name)
+        progress_bar = st.progress(0, text="Starting process...")
 
-    if st.button("Process and Add to Collection", type="primary"):
-      if uploaded_files and active_collection_name:
-        try:
-          collection = cf.get_collection(client, active_collection_name)
-          progress_bar = st.progress(0, text="Starting process...")
-
-          for i, file in enumerate(uploaded_files):
-            progress = (i + 1) / len(uploaded_files)
-            progress_bar.progress(progress, text=f"Processing: {file.name}")
-            temp_path = os.path.join("/tmp", file.name)
-            with open(temp_path, "wb") as f:
-              f.write(file.getbuffer())
-
-            processing_function = getattr(splitter, saved_method)
-            all_params = saved_params.copy()
-            all_params['file_path'] = temp_path
-            documents = processing_function(**all_params)
-
-            if documents:
-              result = cf.add_documents(collection, documents, file.name)
-              if result is None:
-                st.warning(f"  > File '{file.name}' already exists in this collection. Skipped.")
-              else:
-                st.write(f"  > File '{file.name}' processed and added successfully.")
-            else:
-              st.warning(f"No text extracted from '{file.name}'.")
-            os.remove(temp_path)
-
-          progress_bar.progress(1.0, text="Process complete!")
-          st.success("All files were processed!")
-          st.rerun()
-
-        except Exception as e:
-          st.error(f"An error occurred during processing: {e}")
-          st.exception(e)
-      elif not uploaded_files:
-        st.warning("Please upload at least one file.")
-
-  # Tab 2
-  with tab2:
-    st.header(f"❓ Query '{active_collection_name}'")
-
-    retrieval_friendly_names = [RETRIEVAL_METHOD_NAMES.get(method, method) for method in available_retrievers]
-    selected_retrieval_friendly = st.radio(
-      "Choose a retrieval method:",
-      options=retrieval_friendly_names
-    )
-    technical_retrieval_method = next(key for key, value in RETRIEVAL_METHOD_NAMES.items() if value == selected_retrieval_friendly)
-
-    retrieval_params = {}
-    st.caption("Retrieval Parameters")
-
-    if technical_retrieval_method == "top_k":
-      retrieval_params['k'] = st.number_input("K (documents to return)", min_value=1, max_value=50, value=5, step=1)
-    
-    elif technical_retrieval_method == "re_ranker":
-      retrieval_params['high_k'] = st.number_input("High K (docs to retrieve for reranking)", min_value=5, max_value=100, value=20, step=1)
-
-    elif technical_retrieval_method == "multi_query":
-      retrieval_params['n_queries'] = st.number_input("Number of Queries (variations)", min_value=2, max_value=10, value=3, step=1)
-
-    elif technical_retrieval_method == "multi_query_self.re_ranker":
-      retrieval_params['n_queries'] = st.number_input("Number of Queries (variations)", min_value=2, max_value=10, value=5, step=1) # Default maior p/ self.re_ranker
-
-    elif technical_retrieval_method == "sentence_window_retrieval":
-      retrieval_params['n_main'] = st.number_input("N Main (central docs)", min_value=1, max_value=10, value=1, step=1)
-      retrieval_params['n_around'] = st.number_input("N Around (neighbor docs)", min_value=1, max_value=10, value=3, step=1)
-
-    elif technical_retrieval_method == "sentence_window_retriever_self.re_ranker":
-      retrieval_params['n_main'] = st.number_input("N Main (central docs)", min_value=1, max_value=10, value=3, step=1)
-      retrieval_params['n_around'] = st.number_input("N Around (neighbor docs)", min_value=1, max_value=10, value=4, step=1)
-
- 
-
-    query = st.text_input("Your question:", key="query_input")
-
-    if st.button("Run Query", type="primary"):
-      if query and active_collection_name:
-        try:
-
-          retrieval_function = getattr(retriever, technical_retrieval_method)
+        for i, file in enumerate(uploaded_files):
+          progress = (i + 1) / len(uploaded_files)
+          progress_bar.progress(progress, text=f"Processing: {file.name}")
           
-          all_retrieval_params = retrieval_params.copy()
-          all_retrieval_params['query'] = query
-          all_retrieval_params['collection_name'] = active_collection_name
-          
-      
-          with st.spinner(f"Running '{selected_retrieval_friendly}'..."):
-            result_prompt = retrieval_function(**all_retrieval_params)
-          
-          st.subheader("Retrieval Results:")
-          st.markdown(result_prompt)
+          # MUDANÇA: Verificação de duplicata no SQLite
+          if sq.check_pdf_exists(sqlite, active_collection_name, file.name):
+              st.warning(f"  > File '{file.name}' already exists in this collection (SQLite). Skipped.")
+              continue
 
-        except Exception as e:
-          st.error(f"An error occurred during retrieval: {e}")
-          st.exception(e)
-      else:
-        st.warning("Please enter a question.")
+          temp_path = os.path.join("/tmp", file.name)
+          with open(temp_path, "wb") as f:
+            f.write(file.getbuffer())
+
+          processing_function = getattr(splitter, saved_method)
+          all_params = saved_params.copy()
+          all_params['file_path'] = temp_path
+          documents = processing_function(**all_params)
+
+          if documents:
+            # 1. Adiciona no Chroma
+            cf.add_documents(collection, documents, file.name)
+            # 2. Registra no SQLite
+            sq.add_pdf_to_collection(sqlite, active_collection_name, file.name)
+            
+            st.write(f"  > File '{file.name}' processed and added successfully.")
+          else:
+            st.warning(f"No text extracted from '{file.name}'.")
+          os.remove(temp_path)
+
+        progress_bar.progress(1.0, text="Process complete!")
+        st.success("All files were processed!")
+        st.rerun()
+
+      except Exception as e:
+        st.error(f"An error occurred during processing: {e}")
+        st.exception(e)
+    elif not uploaded_files:
+      st.warning("Please upload at least one file.")
