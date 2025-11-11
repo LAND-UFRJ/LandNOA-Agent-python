@@ -1,24 +1,25 @@
-FROM python:3.12-slim-trixie
+FROM python:3.12-slim
+
 WORKDIR /app
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl ca-certificates build-essential \
+ && apt-get install -y --no-install-recommends \
+    ca-certificates curl build-essential \
+    libglib2.0-0 libgl1 libglvnd0 libgl1-mesa-dri \
+    libsm6 libxext6 libxrender1 libx11-6 \
  && rm -rf /var/lib/apt/lists/*
 
- # Download the latest installer
 ADD https://astral.sh/uv/install.sh /uv-installer.sh
 
-# Run the installer then remove it
 RUN sh /uv-installer.sh && rm /uv-installer.sh
 
-# Ensure the installed binary is on the `PATH`
 ENV PATH="/root/.local/bin/:$PATH"
 
-RUN uv sync --locked
-
 COPY requirements.txt .
-RUN uv pip install -r requirements.txt
 
+RUN uv pip install --system -r requirements.txt \
+ && uv pip install --system --upgrade --force-reinstall opencv-python-headless
+ 
 COPY . .
 
 RUN uv run initial_config.py
