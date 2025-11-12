@@ -23,11 +23,12 @@ def create_tables(conn: sqlite3.Connection):
         last_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE TABLE IF NOT EXISTS collection (
-        name TEXT PRIMARY KEY,
-        description TEXT,
-        creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    CREATE TABLE IF NOT EXISTS collections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE,
+        index_method TEXT NOT NULL,
+        index_params TEXT NOT NULL,
+        pdf_name TEXT
     );
 
     CREATE TABLE IF NOT EXISTS config (
