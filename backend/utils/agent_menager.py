@@ -4,6 +4,9 @@ from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, SseConnectionParam
 from . import sqlite_functions as sf
 from . import retrieval
 
+OPENAI_URL = sf.get_config_sqlite("openai_baseurl")
+OPENAI_KEY = sf.get_config_sqlite("openai_api_key")
+
 def _resolve_rag_tool():
   """Resolve the RAG tool object named in the DB/config.
   The value returned by get_rag_tool() should match an attribute exported
@@ -35,13 +38,17 @@ def build_agent() -> LlmAgent:
   
   if sf.get_prompt() is None:
     return LlmAgent(
-    model=LiteLlm(model=f'openai/{model_name}'),
+    model=LiteLlm(model=f'openai/{model_name}',
+                  api_base=OPENAI_URL,
+                  api_key=OPENAI_KEY),
     name=agent_name,
     tools=tools,
   )
   else:
     return LlmAgent(
-      model=LiteLlm(model=f'openai/{model_name}'),
+      model=LiteLlm(model=f'openai/{model_name}',
+                  api_base=OPENAI_URL,
+                  api_key=OPENAI_KEY),
       name=agent_name,
       tools=tools,
       instruction=sf.get_prompt()
