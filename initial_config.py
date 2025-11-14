@@ -1,8 +1,10 @@
-# ...existing code...
 import sqlite3
 from pathlib import Path
+import os
+from dotenv import load_dotenv
 
-DB_FILE = Path(__file__).resolve().parent / "config.db"
+load_dotenv(".env")
+db_path = os.getenv("SQLITE_PATH")
 
 def create_tables(conn: sqlite3.Connection):
     cur = conn.cursor()
@@ -43,22 +45,20 @@ def create_tables(conn: sqlite3.Connection):
 def seed_config(conn: sqlite3.Connection):
     cur = conn.cursor()
     entries = [
-        ("openai_api_key", "placeholder"),
-        ("openai_baseurl", "http://10.246.47.184:10000/v1"),
-        ("model", "qwen3:14b"),
-        ("tools_config", ""),
-        ("agent_name", "teste"),
-        ("retrieval_function", "sentence_window_retrieval")
+        ("openai_api_key",),
+        ("openai_baseurl",),
+        ("model",),
+        ("agent_name",),
+        ("retrieval_function",)
     ]
-    cur.executemany("INSERT OR IGNORE INTO config (name, value) VALUES (?, ?);", entries)
+    cur.executemany("INSERT OR IGNORE INTO config (name) VALUES (?);", entries)
     conn.commit()
 
 def main():
-    DB_FILE.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(db_path)
     create_tables(conn)
     seed_config(conn)
     conn.close()
-    print(f"SQLite DB created at: {DB_FILE}")
+    print(f"SQLite DB created at: {db_path}")
 
 main()

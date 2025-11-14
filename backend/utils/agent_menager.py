@@ -21,9 +21,9 @@ def _resolve_rag_tool():
 
 def build_agent() -> LlmAgent:
   """Build the LlmAgent based on the current config.json."""
-  model_name = sf.get_config("model")
-  agent_name = sf.get_config("agent_name")
-  cache_tools = sf.get_tools()
+  model_name = sf.get_config_sqlite("model")
+  agent_name = sf.get_config_sqlite("agent_name")
+  cache_tools = sf.get_tools_sqlite()
   tools = []
 
   if cache_tools is not None:
@@ -31,7 +31,7 @@ def build_agent() -> LlmAgent:
       McpToolset(connection_params=SseConnectionParams(url=tool["url"]))
       for tool in cache_tools
     ])
-    tools.append(_resolve_rag_tool())
+  tools.append(_resolve_rag_tool())
   
   if sf.get_prompt() is None:
     return LlmAgent(

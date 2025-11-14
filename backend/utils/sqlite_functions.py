@@ -2,32 +2,128 @@ import os
 import sqlite3
 import json
 from dotenv import load_dotenv
+import datetime
 
 load_dotenv(".env")
 db_path = os.getenv("SQLITE_PATH")
 
-'''def create_table_if_not_exists(db_path: str):
+
+# Functions to manage config table
+
+def get_config_sqlite(variable_name: str) -> str:
+  """Gets a config variable from the name column"""
+  try:
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("SELECT value FROM config WHERE name = ?",(variable_name,))
+    row = cur.fetchone()
+    if row is None:
+      raise ValueError(f"No variable with the name {variable_name}")
+    return row[0]
+  except sqlite3.Error as e:
+    raise RuntimeError(f"Database error: {e}")
+  finally:
+    conn.close()
+
+
+def get_tools_sqlite():
+  """Getsthe tools config """
+  try:
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM tools")
+    row = cur.fetchone()
+    if row is None:
+      return None
+    return row[0]
+  except sqlite3.Error as e:
+    raise RuntimeError(f"Database error: {e}")
+  finally:
+    conn.close()
+
+def get_rag_tool_sqlite() -> str:
+  """Returns the name of the RAG function"""
+  try:
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("SELECT value FROM config WHERE name = ?", ('retrieval_function',))
+    row = cur.fetchone()
+    if row is None:
+      raise ValueError("No prompts configured")
+    return row[0]
+  except sqlite3.Error as e:
+    raise RuntimeError(f"Database error: {e}")
+  finally:
+    conn.close()
+
+def update_config_sqlite(name:str, new_value: str):
     """
-    Cria a tabela 'collections' se ela ainda não existir.
+    Change the 'value' column of a especific name.
     """
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
 
     cur.execute("""
-    CREATE TABLE IF NOT EXISTS collections (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE,
-        index_method TEXT NOT NULL,
-        index_params TEXT NOT NULL,
-        pdf_name TEXT
-    );
-    """)
+    UPDATE config
+    SET value = ?
+    WHERE name = ?
+    """,(new_value,name))
 
     conn.commit()
     conn.close()
-'''
 
-def create_collection(db_path: str, name: str, index_method: str, index_params: dict):
+# Functions to manage tools table
+
+def add_tool_sqlite(name:str,url,description)->None:
+  """Adds a tool to a database"""  
+  try:
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("""INSERT into tools (name, url, description, creation_date, last_modification)
+                   VALUES (?, ?, ?, ?, ?) """,(name,
+                                               url,
+                                               description,
+                                               datetime.datetime.now(),
+                                               datetime.datetime.now()))
+    conn.commit()
+  except sqlite3.Error as e:
+    raise RuntimeError(f"Database error: {e}")
+  finally:
+    conn.close()
+
+def remove_tool_sqlite(name:str)->None:
+  """removes a tool from the database"""
+  try:
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("""DELETE FROM tools where name = ?""",(name))
+    conn.commit()
+  except sqlite3.Error as e:
+    raise RuntimeError(f"Database error: {e}")
+  finally:
+    conn.close()
+
+
+# Functions to manage prompts table
+ 
+def get_prompt_sqlite(prompt_id:int = 0 )->str:
+  """gets a prompt, if no args are passed it takes the first"""
+  try:
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM prompts where id = ?",(prompt_id,))
+    row = cur.fetchone()
+    if row is None:
+      return None
+    return row[0]
+  except sqlite3.Error as e:
+    raise RuntimeError(f"Database error: {e}")
+  finally:
+    conn.close()
+
+#Functions to manage collections table
+
+def create_collection_sqlite(name: str, index_method: str, index_params: dict):
     """
     Cria uma nova collection, sem pdf_name ainda.
     Se já existir (mesmo nome), não recria.
@@ -44,7 +140,7 @@ def create_collection(db_path: str, name: str, index_method: str, index_params: 
     conn.close()
 
 
-def add_pdf_to_collection(db_path: str, collection_name: str, pdf_name: str):
+def add_pdf_to_collection_sqlite(collection_name: str, pdf_name: str):
     """
     Adiciona um PDF à lista existente da collection.
     """
@@ -74,7 +170,7 @@ def add_pdf_to_collection(db_path: str, collection_name: str, pdf_name: str):
 
 
 
-def delete_collection(db_path: str, collection_name: str):
+def delete_collection_sqlite(collection_name: str):
     """
     Remove a linha inteira da tabela 'collections' com o nome especificado.
     """
@@ -87,7 +183,7 @@ def delete_collection(db_path: str, collection_name: str):
 
 
 
-def list_collections(db_path: str):
+def list_collections_sqlite():
     """
     Retorna uma lista apenas com os nomes das collections existentes.
     """
@@ -102,7 +198,7 @@ def list_collections(db_path: str):
     return [row[0] for row in rows]
 
 
-def get_collection_params(db_path: str, collection_name: str):
+def get_collection_params_sqlite(collection_name: str):
     """
     Retorna os parâmetros e PDFs de uma collection específica.
     """
@@ -119,7 +215,7 @@ def get_collection_params(db_path: str, collection_name: str):
     conn.close()
 
     if not row:
-        print(f"⚠️ Collection '{collection_name}' não encontrada.")
+        print(f"Collection '{collection_name}' não encontrada.")
         return None
 
     index_method, index_params, pdf_name = row

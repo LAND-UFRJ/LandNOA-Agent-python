@@ -1,20 +1,12 @@
 import streamlit as st
 import backend.utils.chroma_functions as cf
 from backend.utils.indexing import Splitter
-from backend.utils.retrieval import Retriever # MUDANÇA: Importado de volta
+from backend.utils.retrieval import Retriever
 import os
 import inspect
 import nltk
 import backend.utils.sqlite_functions as sq
 from dotenv import load_dotenv
-
-# --- Configuração do DB Path ---
-load_dotenv(".env")
-db_path = os.getenv("SQLITE_PATH")
-
-if not db_path:
-    st.error("SQLITE_PATH não encontrado no .env. Por favor, configure.")
-    st.stop()
 
 nltk.download("punkt")
 
@@ -36,7 +28,6 @@ def start_services():
     st.error(f"Could not initialize services. Error: {e}")
     return None, None, None
 
-# MUDANÇA: 'retriever' adicionado
 client, splitter, retriever = start_services() 
 if client is None:
   st.stop()
@@ -54,15 +45,14 @@ available_methods = [
   name for name, func in inspect.getmembers(splitter, predicate=inspect.ismethod)
   if name in METHOD_NAMES and not name.startswith('_')
 ]
-
-# MUDANÇA: Dicionários de Retrieval de volta
+# Retrieval Methods
 RETRIEVAL_METHOD_NAMES = {
   "top_k": "Top-K",
-  "re_ranker": "Top-K (with Re-Ranker)",
+  "top_k_reranker": "Top-K (with Re-Ranker)",
   "multi_query": "Multi-Query",
-  "multi_query_self.re_ranker": "Multi-Query (with Re-Ranker)",
+  "multi_query_reranker": "Multi-Query (with Re-Ranker)",
   "sentence_window_retrieval": "Sentence Window",
-  "sentence_window_retriever_self.re_ranker": "Sentence Window (with Re-Ranker)"
+  "sentence_window_retriever_reranker": "Sentence Window (with Re-Ranker)"
 }
 available_retrievers = [
   name for name, func in inspect.getmembers(retriever, predicate=inspect.ismethod)
@@ -72,7 +62,7 @@ available_retrievers = [
 # --- 4. Sidebar for Collection Management ---
 st.sidebar.header("Collection Management")
 try:
-  collection_list = sq.list_collections(db_path) 
+  collection_list = sq.list_collections_sqlite() 
 except Exception as e:
   st.sidebar.error(f"Error listing collections: {e}")
   collection_list = []
@@ -113,14 +103,13 @@ else:
   if st.sidebar.button("Create Collection"):
     if new_collection_name and new_collection_name not in collection_list:
       try:
-        # 1. Adiciona no SQLite
-        sq.create_collection(
-            db_path=db_path,
+        # Adding in sqlite
+        sq.create_collection_sqlite(
             name=new_collection_name,
             index_method=technical_method,
             index_params=params
         )
-        # 2. Cria no Chroma
+        # Adding in Chroma
         cf.create_collection(
             client=client,
             collection_name=new_collection_name
@@ -142,10 +131,10 @@ if collection_list:
   collection_to_delete = st.sidebar.selectbox("Select to delete:", options=[""] + collection_list)
   if collection_to_delete and st.sidebar.button(f"Delete '{collection_to_delete}'"):
     try:
-      # 1. Deleta do Chroma
+      # Removing Sqlite
       cf.delete_collection(client, collection_to_delete)
-      # 2. Deleta do SQLite
-      sq.delete_collection(db_path, collection_to_delete)
+      # Removing in Chroma
+      sq.delete_collection_sqlite(collection_to_delete)
       st.sidebar.success(f"Collection '{collection_to_delete}' deleted.")
       st.rerun()
     except Exception as e:
@@ -158,10 +147,10 @@ else:
   st.success(f"Working on collection: **{active_collection_name}**")
 
   try:
-    collection_details = sq.get_collection_params(db_path, active_collection_name)
+    collection_details = sq.get_collection_params_sqlite(active_collection_name)
 
     if not collection_details:
-        st.error(f"Detalhes da coleção '{active_collection_name}' não encontrados no SQLite.")
+        st.error(f"Information off '{active_collection_name}' not found in SQLite.")
         st.stop()
 
     saved_method = collection_details.get("index_method")
@@ -190,10 +179,9 @@ else:
 
   st.divider()
 
-  # --- MUDANÇA: Abas reintroduzidas ---
   tab1, tab2 = st.tabs(["🗂️ Manage Documents", "🔍 Query Collection"])
 
-  # Tab 1: Manage Documents (Nosso código existente)
+  # Tab 1:
   with tab1:
     st.header(f"➕ Add New Documents to '{active_collection_name}'")
     uploaded_files = st.file_uploader("Drag and drop PDF files here", type="pdf", accept_multiple_files=True)
@@ -222,10 +210,8 @@ else:
             documents = processing_function(**all_params)
 
             if documents:
-              # 1. Adiciona no Chroma
               cf.add_documents(collection, documents, file.name)
-              # 2. Registra no SQLite
-              sq.add_pdf_to_collection(db_path, active_collection_name, file.name)
+              sq.add_pdf_to_collection_sqlite(active_collection_name, file.name)
               st.write(f"  > File '{file.name}' processed and added successfully.")
             else:
               st.warning(f"No text extracted from '{file.name}'.")
@@ -241,7 +227,7 @@ else:
       elif not uploaded_files:
         st.warning("Please upload at least one file.")
 
-  # MUDANÇA: Tab 2: Query Collection (Código original restaurado)
+  # Tab 2:
   with tab2:
     st.header(f"❓ Query '{active_collection_name}'")
 
