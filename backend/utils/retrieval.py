@@ -9,13 +9,15 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 
-load_dotenv(".env")
+load_dotenv(dotenv_path=Path(__file__).parent / '.env')
 
-OPENAI_URL = get_config_sqlite("openai_baseurl")
-OPENAI_KEY = get_config_sqlite("openai_api_key")
+OPENAI_URL = get_config_sqlite('openai_baseurl')
+OPENAI_KEY = get_config_sqlite('openai_api_key')
 CHROMA_URL = str(os.getenv("CHROMA_HOST"))
 CHROMA_PORT = int(os.getenv("CHROMA_PORT"))
-MODEL = get_config_sqlite("model")
+MODEL = get_config_sqlite('model')
+
+print(CHROMA_URL,CHROMA_PORT)
 client = chromadb.HttpClient(host=CHROMA_URL,port=CHROMA_PORT)
 
 llm = ChatOpenAI(base_url=OPENAI_URL,MODEL=MODEL,api_key=OPENAI_KEY)
@@ -23,9 +25,15 @@ llm = ChatOpenAI(base_url=OPENAI_URL,MODEL=MODEL,api_key=OPENAI_KEY)
 class Retriever():
   """Class that has the rertieval functions"""
   def __init__(self):
-    self.re_ranker = FlagReranker('BAAI/bge-reranker-base',
+    self.re_ranker = None
+
+  def get_reranker(self):
+    """gets the reranker"""
+    if self.re_ranker is None:
+      self.re_ranker = FlagReranker('BAAI/bge-reranker-base',
                               use_fp16=True,
                               normalize=True)
+    return self.re_ranker
 
   def rerank_documents(self,
                       query: str,
@@ -48,11 +56,12 @@ class Retriever():
                                 collection_name: str,
                                 n_main: int = 1,
                                 n_around: int = 3) -> Dict[str, Any]:
-    """
+    f"""
     Implements the SWR (Sentence Window Retrieval) strategy.
     This function finds the most relevant document and also retrieves the
     documents that were physically stored next to it (before and after),
     assuming they might contain relevant context.
+    The collections avaliable {client.list_collections()} 
     Args:
       query (str): The user's query.
       collection_name (str): The name of an existing ChromaDB collection.
