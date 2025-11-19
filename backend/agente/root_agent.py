@@ -20,7 +20,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 root_agent = build_agent()
 agent_name = get_config_sqlite("agent_name")
-a2a_app = to_a2a(root_agent, port=PORT, host=IP)
+agent_card = AgentCard(name=agent_name,
+    url=f"http://{IP}:{PORT}/",
+    description= "Test agent from file",
+    version="1.0.0",
+    capabilities= {},
+    skills=[],
+    defaultInputModes= ["text/plain"],
+    defaultOutputModes= ["text/plain"],
+    supportsAuthenticatedExtendedCard= False,
+)
+a2a_app = to_a2a(root_agent,agent_card=agent_card)
 
 a2a_app.add_middleware(
   CORSMiddleware,
