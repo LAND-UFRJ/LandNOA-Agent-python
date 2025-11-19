@@ -1,10 +1,7 @@
 import sqlite3
 from pathlib import Path
-import os
-from dotenv import load_dotenv
 
-load_dotenv(".env")
-db_path = os.getenv("SQLITE_PATH")
+db_path = "config.db"
 
 def create_tables(conn: sqlite3.Connection):
     cur = conn.cursor()

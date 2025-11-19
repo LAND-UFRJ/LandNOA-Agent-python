@@ -4,8 +4,8 @@ import json
 from dotenv import load_dotenv
 import datetime
 
-load_dotenv(".env")
-db_path = os.getenv("SQLITE_PATH")
+#load_dotenv(".env")
+db_path = "config.db"
 
 
 # Functions to manage config table
