@@ -20,6 +20,7 @@ services:
       - CHROMA_PORT=8000
       - SQLITE_PATH=config.db
       - AGENT_PORT=10000
+      - HOST_IP=${HOST_IP}
     command: ["sh","-c","until curl -sS http://chroma:8000/ >/dev/null 2>&1; do sleep 1; done; python3 backend/agente/root_agent.py"]
     restart: unless-stopped
 

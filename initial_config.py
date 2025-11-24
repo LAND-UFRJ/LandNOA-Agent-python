@@ -48,7 +48,7 @@ def seed_config(conn: sqlite3.Connection):
         ("agent_name",),
         ("retrieval_function",)
     ]
-    cur.executemany("INSERT OR IGNORE INTO config (name) VALUES (?);", entries)
+    cur.executemany("INSERT OR IGNORE INTO config (name, value) VALUES (?, ?);", entries)
     conn.commit()
 
 def main():
