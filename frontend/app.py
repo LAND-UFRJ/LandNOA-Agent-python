@@ -8,35 +8,32 @@ import nltk
 import backend.utils.sqlite_functions as sq
 from dotenv import load_dotenv
 import requests
+from streamlit_option_menu import option_menu
 import json
 
 nltk.download("punkt")
 
-# --- Page Configuration ---
+# ==============================================================================
+# 1. CONFIGURAÇÃO DA PÁGINA
+# ==============================================================================
 st.set_page_config(page_title="LandNOA Manager", layout="wide")
 
-# Título e Menu Superior (Funciona como Abas, mas atualiza a sidebar)
-st.title("🤖 LandNOA Agent Manager")
 
-# --- MENU SUPERIOR (TIPO ABAS) ---
-# horizontal=True faz parecer abas no topo
-page_selection = st.radio(
-    "Navegação", 
-    ["🧠 RAG System", "⚙️ Agent Configuration"], 
-    horizontal=True,
-    label_visibility="collapsed" # Esconde o label para ficar mais limpo
-)
-st.divider()
+# ==============================================================================
+# 2. SERVIÇOS E FUNÇÕES AUXILIARES
+# ==============================================================================
 
-# --- Helper Functions ---
 def get_models(base_url: str):
+    """Busca modelos disponíveis na API do Ollama/OpenAI"""
     try:
         r = requests.get(f"{base_url}/models", timeout=2)
-        return [m["id"] for m in r.json().get("data", [])]
+        data = r.json()
+        if "data" in data:
+            return [m["id"] for m in data["data"]]
+        return []
     except:
         return []
 
-# --- Starting Services ---
 @st.cache_resource
 def start_services():
     try:
@@ -44,25 +41,20 @@ def start_services():
         splitter = Splitter()
         retriever = Retriever()
         return client, splitter, retriever
-    except Exception as e:
-        st.error(f"Could not initialize services. Error: {e}")
+    except:
         return None, None, None
 
 client, splitter, retriever = start_services() 
-if client is None:
-    st.stop()
+if client is None: st.stop()
 
-# --- Method Dictionaries ---
+# Dicionários de Métodos
 METHOD_NAMES = {
     "equal_chunks": "Fixed Size (Langchain)",
     "unstructured_chunks": "Structured (Unstructured)",
     "simple_decision": "Semantic (Linear)",
     "changing_decision": "Semantic (Exponential)"
 }
-available_methods = [
-    name for name, func in inspect.getmembers(splitter, predicate=inspect.ismethod)
-    if name in METHOD_NAMES and not name.startswith('_')
-]
+available_methods = [m for m, f in inspect.getmembers(splitter, inspect.ismethod) if m in METHOD_NAMES]
 
 RETRIEVAL_METHOD_NAMES = {
     "top_k": "Top-K",
@@ -72,290 +64,338 @@ RETRIEVAL_METHOD_NAMES = {
     "sentence_window_retrieval": "Sentence Window",
     "sentence_window_retriever_reranker": "Sentence Window (with Re-Ranker)"
 }
-available_retrievers = [
-    name for name, func in inspect.getmembers(retriever, predicate=inspect.ismethod)
-    if name in RETRIEVAL_METHOD_NAMES and not name.startswith('_')
-]
+available_retrievers = [m for m, f in inspect.getmembers(retriever, inspect.ismethod) if m in RETRIEVAL_METHOD_NAMES]
 
 # ==============================================================================
-# LOGIC FOR PAGE 1: RAG SYSTEM
+# 3. NAVBAR (MENU SUPERIOR)
 # ==============================================================================
-if page_selection == "🧠 RAG System":
+
+# Layout do Header
+col_logo, col_menu = st.columns([1, 5])
+
+with col_logo:
+    st.title("🤖 LandNOA")
+
+with col_menu:
+    selected_page = option_menu(
+        menu_title=None,
+        options=["RAG System", "Agent Config", "System Prompts", "Tools Config"],
+        icons=["database", "cpu", "card-text", "tools"],
+        default_index=0,
+        orientation="horizontal"
+    )
+
+st.divider()
+
+# ==============================================================================
+# PÁGINA 1: RAG SYSTEM
+# ==============================================================================
+if selected_page == "RAG System":
     
-    # --- Sidebar Specific to RAG (Só aparece nesta aba) ---
+    # Sidebar
     st.sidebar.header("📂 Collection Management")
-    try:
-        collection_list = sq.list_collections_sqlite() 
-    except Exception as e:
-        st.sidebar.error(f"Error listing collections: {e}")
-        collection_list = []
+    try: collection_list = sq.list_collections_sqlite() 
+    except: collection_list = []
 
-    st.sidebar.subheader("Select or Create")
-    # Usando selectbox na sidebar (mais limpo que radio vertical)
-    option = st.sidebar.selectbox("Action:",("Use existing collection", "Create a new collection"))
+    # Se st.segmented_control não estiver disponível na sua versão, use st.radio ou st.selectbox
+    try:
+        mode = st.sidebar.segmented_control("Mode", ["Select", "Create"], selection_mode="single", default="Select")
+    except AttributeError:
+        mode = st.sidebar.radio("Mode", ["Select", "Create"])
 
     active_collection_name = None
     
-    if option == "Use existing collection":
+    if mode == "Select":
         if collection_list:
-            active_collection_name = st.sidebar.selectbox("Available collections:", options=collection_list)
+            active_collection_name = st.sidebar.selectbox("Choose Collection", collection_list)
         else:
-            st.sidebar.warning("No collections found.")
+            st.sidebar.info("No collections found.")
     else:
-        new_collection_name = st.sidebar.text_input("New collection name:")
-        
-        friendly_names = [METHOD_NAMES.get(method, method) for method in available_methods]
-        selected_method_friendly = st.sidebar.selectbox("Processing method:", options=friendly_names)
-        technical_method = next(key for key, value in METHOD_NAMES.items() if value == selected_method_friendly)
+        with st.sidebar.container(border=True):
+            new_name = st.text_input("Name", placeholder="e.g., Finance_Docs")
+            friendly_names = [METHOD_NAMES.get(m, m) for m in available_methods]
+            sel_method = st.selectbox("Strategy", friendly_names)
+            tech_method = next(k for k, v in METHOD_NAMES.items() if v == sel_method)
 
-        params = {}
-        st.sidebar.caption("Method Parameters")
-        
-        if technical_method == "equal_chunks":
-            params['chunck_size'] = st.sidebar.slider("Chunk Size:", 200, 2000, 750)
-            params['chunk_overlap'] = st.sidebar.slider("Chunk Overlap:", 0, 500, 50)
-        elif technical_method in ["simple_decision", "changing_decision"]:
-            params['start_limit'] = st.sidebar.slider("Initial Similarity:", 0.0, 1.0, 0.7, 0.01)
-            params['y'] = st.sidebar.slider("Growth Factor (y):", 0.0, 1.0, 0.5, 0.01)
+            params = {}
+            if tech_method == "equal_chunks":
+                c1, c2 = st.columns(2)
+                params['chunck_size'] = c1.number_input("Size", 100, 2000, 750)
+                params['chunk_overlap'] = c2.number_input("Overlap", 0, 500, 50)
+            elif "decision" in tech_method:
+                params['start_limit'] = st.slider("Similarity", 0.0, 1.0, 0.7)
+                params['y'] = st.slider("Growth", 0.0, 1.0, 0.5)
 
-        if st.sidebar.button("Create Collection"):
-            if new_collection_name and new_collection_name not in collection_list:
-                try:
-                    sq.create_collection_sqlite(new_collection_name, technical_method, params)
-                    cf.create_collection(client, new_collection_name)
-                    st.sidebar.success(f"Collection '{new_collection_name}' created!")
-                    st.rerun() 
-                except Exception as e:
-                    st.sidebar.error(f"Creation failed: {e}")
-            elif new_collection_name in collection_list:
-                st.sidebar.error("Name already exists.")
-            else:
-                st.sidebar.error("Name cannot be empty.")
+            if st.button("Create Collection", type="primary", use_container_width=True):
+                if new_name and new_name not in collection_list:
+                    sq.create_collection_sqlite(new_name, tech_method, params)
+                    cf.create_collection(client, new_name)
+                    st.rerun()
         
-        if new_collection_name:
-            active_collection_name = new_collection_name
+        if new_name: active_collection_name = new_name
 
-    if collection_list:
-        st.sidebar.markdown("---")
-        collection_to_delete = st.sidebar.selectbox("Select to delete:", options=[""] + collection_list)
-        if collection_to_delete and st.sidebar.button(f"Delete '{collection_to_delete}'"):
-            try:
-                cf.delete_collection(client, collection_to_delete)
-                sq.delete_collection_sqlite(collection_to_delete)
-                st.sidebar.success(f"Collection '{collection_to_delete}' deleted.")
+    if collection_list and mode == "Select":
+        st.sidebar.divider()
+        with st.sidebar.expander("⚠️ Delete Collection"):
+            del_col = st.selectbox("Select to Delete", [""] + collection_list)
+            if del_col and st.button("Confirm Delete", type="primary"):
+                cf.delete_collection(client, del_col)
+                sq.delete_collection_sqlite(del_col)
                 st.rerun()
-            except Exception as e:
-                st.sidebar.error(f"Deletion failed: {e}")
 
-    # --- Main RAG Content ---
+    # Main Area
     if not active_collection_name:
-        st.info("Please select or create a collection in the sidebar.")
+        st.info("👈 Select a collection from the sidebar to manage documents.")
     else:
-        st.success(f"Working on collection: **{active_collection_name}**")
+        c_head, c_meta = st.columns([3, 1])
+        c_head.subheader(f"{active_collection_name}")
         
         try:
-            collection_details = sq.get_collection_params_sqlite(active_collection_name)
-            if not collection_details:
-                st.error(f"Details for '{active_collection_name}' not found in SQLite.")
-                st.stop()
+            details = sq.get_collection_params_sqlite(active_collection_name)
+            pdf_names = details.get("pdfs", [])
+            c_meta.caption(f"📚 {len(pdf_names)} Documents Indexed")
+            
+            with st.expander("View Configuration Details"):
+                st.json(details)
+        except: pass
 
-            saved_method = collection_details.get("index_method")
-            saved_params = collection_details.get("index_params", {}) 
-            pdf_names = collection_details.get("pdfs", [])
-
-            st.subheader("Collection Info")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"**Processing Method:**")
-                st.code(METHOD_NAMES.get(saved_method, "Unknown"))
-                st.markdown(f"**Saved Parameters:**")
-                if saved_params:
-                    st.json(saved_params)
-                else:
-                    st.text("None")
-            with col2:
-                st.markdown(f"**Documents ({len(pdf_names)}):**")
-                if pdf_names:
-                    st.dataframe(pdf_names, use_container_width=True, hide_index=True, column_config={"value":"File Name"})
-                else:
-                    st.text("No documents added yet.")
-        except Exception as e:
-            st.error(f"Could not load collection info. Error: {e}")
-            st.stop()
-
-        st.divider()
-
-        rag_subtab1, rag_subtab2 = st.tabs(["🗂️ Manage Documents", "🔍 Query Collection"])
-
-        # --- Subtab 1: Add Docs ---
-        with rag_subtab1:
-            st.header(f"➕ Add New Documents")
-            uploaded_files = st.file_uploader("Drag and drop PDF files here", type="pdf", accept_multiple_files=True)
-
-            if st.button("Process and Add to Collection", type="primary"):
-                if uploaded_files:
-                    try:
-                        collection = cf.get_collection(client, active_collection_name)
-                        progress_bar = st.progress(0, text="Starting process...")
-                        
-                        for i, file in enumerate(uploaded_files):
-                            progress = (i + 1) / len(uploaded_files)
-                            progress_bar.progress(progress, text=f"Processing: {file.name}")
+        t1, t2 = st.tabs(["📥 Upload Documents", "🔎 Search & Test"])
+        
+        with t1:
+            with st.container(border=True):
+                files = st.file_uploader("Upload PDF files", type="pdf", accept_multiple_files=True)
+                if files:
+                    if st.button(f"Process {len(files)} Files", type="primary"):
+                        coll = cf.get_collection(client, active_collection_name)
+                        bar = st.progress(0, "Starting...")
+                        for i, f in enumerate(files):
+                            if f.name in pdf_names: continue
+                            tmp = os.path.join("/tmp", f.name)
+                            with open(tmp, "wb") as file: file.write(f.getbuffer())
                             
-                            if file.name in pdf_names:
-                                st.warning(f"File '{file.name}' already exists. Skipped.")
-                                continue
-
-                            temp_path = os.path.join("/tmp", file.name)
-                            with open(temp_path, "wb") as f:
-                                f.write(file.getbuffer())
-
-                            processing_function = getattr(splitter, saved_method)
-                            all_params = saved_params.copy()
-                            all_params['file_path'] = temp_path
-                            documents = processing_function(**all_params)
-
-                            if documents:
-                                cf.add_documents(collection, documents, file.name)
-                                sq.add_pdf_to_collection_sqlite(active_collection_name, file.name)
-                                st.write(f"File '{file.name}' processed and added successfully.")
-                            else:
-                                st.warning(f"No text extracted from '{file.name}'.")
+                            func = getattr(splitter, details["index_method"])
+                            p = details["index_params"].copy()
+                            p['file_path'] = tmp
+                            docs = func(**p)
                             
-                            if os.path.exists(temp_path):
-                                os.remove(temp_path)
-
-                        progress_bar.progress(1.0, text="Process complete!")
-                        st.success("All files were processed!")
+                            if docs:
+                                cf.add_documents(coll, docs, f.name)
+                                sq.add_pdf_to_collection_sqlite(active_collection_name, f.name)
+                            os.remove(tmp)
+                            bar.progress((i+1)/len(files))
+                        st.success("Done!")
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"An error occurred: {e}")
-                else:
-                    st.warning("Please upload at least one file.")
 
-        # --- Subtab 2: Query ---
-        with rag_subtab2:
-            st.header(f"❓ Query '{active_collection_name}'")
+        with t2:
+            query = st.text_input("Search", placeholder="Ask a question about your documents...")
+            c_opt, c_btn = st.columns([4, 1])
+            with c_opt:
+                friendly_rets = [RETRIEVAL_METHOD_NAMES.get(m, m) for m in available_retrievers]
+                sel_ret = st.selectbox("Method", friendly_rets, label_visibility="collapsed")
+                tech_ret = next(k for k, v in RETRIEVAL_METHOD_NAMES.items() if v == sel_ret)
             
-            friendly_retrievers = [RETRIEVAL_METHOD_NAMES.get(m, m) for m in available_retrievers]
-            selected_retrieval_friendly = st.selectbox("Choose a retrieval method:", options=friendly_retrievers)
-            technical_retrieval_method = next(k for k, v in RETRIEVAL_METHOD_NAMES.items() if v == selected_retrieval_friendly)
-
-            retrieval_params = {}
-            st.caption("Retrieval Parameters")
-
-            if "top_k" in technical_retrieval_method:
-                if "re_ranker" in technical_retrieval_method:
-                     retrieval_params['high_k'] = st.number_input("High K", 5, 100, 20)
-                else:
-                     retrieval_params['k'] = st.number_input("K", 1, 50, 5)
+            with c_btn:
+                search_btn = st.button("Search", type="primary", use_container_width=True)
             
-            if "multi_query" in technical_retrieval_method:
-                retrieval_params['n_queries'] = st.number_input("Number of Queries", 2, 10, 3)
-                retrieval_params['n_results'] = st.number_input("Results per Query", 2, 20, 5)
-            
-            if "sentence_window" in technical_retrieval_method:
-                default_main = 3 if "re_ranker" in technical_retrieval_method else 1
-                default_around = 4 if "re_ranker" in technical_retrieval_method else 3
-                retrieval_params['n_main'] = st.number_input("N Main", 1, 10, default_main)
-                retrieval_params['n_around'] = st.number_input("N Around", 1, 10, default_around)
-
-            query = st.text_input("Your question:", key="query_input")
-            if st.button("Run Query", type="primary"):
-                if query and active_collection_name:
-                    try:
-                        retrieval_function = getattr(retriever, technical_retrieval_method)
-                        full_params = retrieval_params.copy()
-                        full_params['query'] = query
-                        full_params['collection_name'] = active_collection_name
-                        
-                        with st.spinner(f"Running '{selected_retrieval_friendly}'..."):
-                            result_prompt = retrieval_function(**full_params)
-                        
-                        st.subheader("Retrieval Results:")
-                        st.write(result_prompt)
-                    except Exception as e:
-                        st.error(f"Error during retrieval: {e}")
-                else:
-                    st.warning("Please enter a question.")
+            if search_btn and query:
+                func = getattr(retriever, tech_ret)
+                p = {'query': query, 'collection_name': active_collection_name, 'k': 5}
+                with st.spinner("Searching..."):
+                    res = func(**p)
+                st.markdown("### Results")
+                with st.container(border=True):
+                     st.write(res)
 
 # ==============================================================================
-# LOGIC FOR PAGE 2: AGENT CONFIG
+# PÁGINA 2: AGENT CONFIG
 # ==============================================================================
-elif page_selection == "⚙️ Agent Configuration":
+elif selected_page == "Agent Config":
     
-    st.header("🛠️ Global Agent Configuration")
+    st.header("⚙️ Agent Configuration")
+    c_main, c_side = st.columns([2, 1])
     
-    # --- Bloco 1: Conexão ---
-    st.subheader("1️⃣ Connection Settings")
-    with st.container(border=True):
-        with st.form("connection_form"):
-            try: curr_name = sq.get_config_sqlite("agent_name")
-            except: curr_name = ""
-            
-            try: curr_url = sq.get_config_sqlite("openai_baseurl")
-            except: curr_url = ""
-            
-            try: curr_key = sq.get_config_sqlite("openai_api_key")
-            except: curr_key = ""
+    with c_main:
+        st.subheader("🔌 Connection")
+        with st.container(border=True):
+            try: c_name = sq.get_config_sqlite("agent_name")
+            except: c_name = ""
+            try: c_url = sq.get_config_sqlite("openai_baseurl")
+            except: c_url = ""
+            try: c_key = sq.get_config_sqlite("openai_api_key")
+            except: c_key = ""
 
-            new_name = st.text_input("Agent Name:", value=curr_name)
-            new_url = st.text_input("Base URL:", value=curr_url)
-            new_key = st.text_input("API Key:", value=curr_key, type="password")
+            n_name = st.text_input("Agent Name", c_name)
+            n_url = st.text_input("Base URL", c_url, placeholder="http://localhost:11434/v1")
+            n_key = st.text_input("API Key", c_key, type="password")
             
-            st.markdown("---")
-            if st.form_submit_button("💾 Save Connection", type="primary"):
-                sq.update_config_sqlite("agent_name", new_name)
-                sq.update_config_sqlite("openai_baseurl", new_url)
-                sq.update_config_sqlite("openai_api_key", new_key)
-                st.success("Connection saved!")
+            if st.button("Save Connection", type="primary"):
+                sq.update_config_sqlite("agent_name", n_name)
+                sq.update_config_sqlite("openai_baseurl", n_url)
+                sq.update_config_sqlite("openai_api_key", n_key)
+                st.success("Connection Saved!")
                 st.rerun()
 
-    # --- Bloco 2: Cérebro ---
-    st.subheader("2️⃣ Brain & Behavior")
-    
-    db_url = ""
-    try: db_url = sq.get_config_sqlite("openai_baseurl")
-    except: pass
-
-    if not db_url:
-        st.warning("Salve a URL acima primeiro para carregar os modelos.")
-    else:
+    with c_side:
+        st.subheader("🧠 Brain")
         with st.container(border=True):
-            api_models = get_models(db_url)
-            
-            if not api_models:
-                st.error(f"Não foi possível listar modelos em: `{db_url}`. Verifique se o serviço está rodando.")
+            if not c_url:
+                st.info("Set URL first.")
             else:
-                with st.form("behavior_form"):
-                    # Model Select
-                    try: curr_model = sq.get_config_sqlite("model")
-                    except: curr_model = api_models[0]
+                models = get_models(c_url)
+                if not models: 
+                    st.warning("No models found.")
+                    models = ["gpt-4o"] 
+                
+                try: c_mod = sq.get_config_sqlite("model")
+                except: c_mod = models[0]
+                
+                idx = models.index(c_mod) if c_mod in models else 0
+                sel_mod = st.selectbox("Model", models, index=idx)
 
-                    if curr_model not in api_models:
-                        idx_model = 0
+                try: c_ret = sq.get_config_sqlite("retrieval_function")
+                except: c_ret = list(RETRIEVAL_METHOD_NAMES.keys())[0]
+                
+                f_opts = list(RETRIEVAL_METHOD_NAMES.values())
+                cur_f = RETRIEVAL_METHOD_NAMES.get(c_ret, f_opts[0])
+                idx_r = f_opts.index(cur_f)
+                sel_ret_f = st.selectbox("Retrieval", f_opts, index=idx_r)
+
+                if st.button("Update Brain", use_container_width=True):
+                    sq.update_config_sqlite("model", sel_mod)
+                    tech = {v: k for k, v in RETRIEVAL_METHOD_NAMES.items()}[sel_ret_f]
+                    sq.update_config_sqlite("retrieval_function", tech)
+                    st.success("Brain Updated!")
+
+# ==============================================================================
+# PÁGINA 3: SYSTEM PROMPTS
+# ==============================================================================
+elif selected_page == "System Prompts":
+    
+    st.header("📝 System Prompts")
+    
+    col_list, col_edit = st.columns([1, 2])
+    
+    with col_list:
+        st.subheader("Select Prompt")
+        try: prompts = sq.list_prompts_sqlite()
+        except: prompts = []
+        
+        # Modo: Criar ou Editar
+        mode = st.radio("Mode:", ["Edit Existing", "Create New"], horizontal=True)
+        
+        selected_prompt = None
+        if mode == "Edit Existing":
+            if not prompts:
+                st.info("No prompts created yet.")
+            else:
+                prompt_options = {p['id']: f" {p.get('obs', 'Untitled')}" for p in prompts}
+                sel_id = st.selectbox("Choose Prompt:", list(prompt_options.keys()), format_func=lambda x: prompt_options[x])
+                selected_prompt = next((p for p in prompts if p['id'] == sel_id), None)
+
+    with col_edit:
+        st.subheader("Editor")
+        with st.container(border=True):
+            if mode == "Create New":
+                with st.form("new_prompt"):
+                    new_text = st.text_area("System Prompt Text", height=300, placeholder="You are a helpful assistant...")
+                    new_obs = st.text_input("Observation")
+                    
+                    if st.form_submit_button("Create Prompt", type="primary"):
+                        if new_obs and new_text:
+                            sq.add_prompt_sqlite(new_obs, new_text)
+                            st.success("Prompt Created!")
+                            st.rerun()
+                        else:
+                            st.error("Please fill all fields.")
+                            
+            elif mode == "Edit Existing" and selected_prompt:
+                # --- FORMULÁRIO APENAS PARA EDIÇÃO ---
+                with st.form("edit_prompt"):
+                    st.caption(f"Editing ID: {selected_prompt['id']}")
+                    
+
+                    ed_text = st.text_area("System Prompt Text", value=selected_prompt['prompt'], height=300)
+                    ed_obs = st.text_input("Observation", value=selected_prompt['obs'])
+                    
+                    # Botão de Atualizar ocupa a largura total do form
+                    if st.form_submit_button("💾 Update Prompt", type="primary", use_container_width=True):
+                        sq.update_prompt_sqlite(selected_prompt['id'], ed_obs, ed_text)
+                        st.toast("Prompt updated successfully!", icon="✅")
+                        st.rerun()
+
+                # --- ÁREA DE DELETAR (FORA DO FORM) ---
+                st.markdown("---") # Linha separadora
+                with st.expander("🗑️ Delete this prompt", expanded=False):
+                    st.warning("This action cannot be undone.")
+                    # Agora sim o botão funciona porque está isolado
+                    if st.button("Confirm Deletion", type="secondary", use_container_width=True):
+                        sq.delete_prompt_sqlite(selected_prompt['id'])
+                        st.success("Prompt deleted!")
+                        st.rerun()
+
+# ==============================================================================
+# PÁGINA 4: TOOLS CONFIG
+# ==============================================================================
+elif selected_page == "Tools Config":
+    
+    st.header("🔧 Tools Configuration")
+    
+    try: tools = sq.list_tools_sqlite()
+    except: tools = []
+    
+    # Visualização Tabela
+    if tools:
+        with st.expander("📚 View Tool Library", expanded=True):
+            st.dataframe(tools, use_container_width=True, hide_index=True)
+    else:
+        st.info("No tools configured yet.")
+
+    st.divider()
+    c_add, c_edit = st.columns(2)
+    
+    # Bloco Adicionar
+    with c_add:
+        st.subheader("Add Tool")
+        with st.container(border=True):
+            with st.form("add_tool"):
+                t_name = st.text_input("Tool Name (Unique ID)", placeholder="search_api")
+                t_url = st.text_input("Endpoint URL", placeholder="http://localhost:8000/search")
+                t_desc = st.text_area("Description", placeholder="Searches the web...")
+                
+                if st.form_submit_button("Add Tool", type="primary"):
+                    if t_name and t_url:
+                        try:
+                            sq.add_tool_sqlite(t_name, t_url, t_desc)
+                            st.success(f"Added '{t_name}'")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
                     else:
-                        idx_model = api_models.index(curr_model)
-                    
-                    selected_model = st.selectbox("Select Model:", options=api_models, index=idx_model)
+                        st.warning("Name and URL required.")
 
-                    # Retrieval Select
-                    try: curr_ret_tech = sq.get_config_sqlite("retrieval_function")
-                    except: curr_ret_tech = list(RETRIEVAL_METHOD_NAMES.keys())[0]
-
-                    friendly_opts = list(RETRIEVAL_METHOD_NAMES.values())
-                    curr_friendly = RETRIEVAL_METHOD_NAMES.get(curr_ret_tech, friendly_opts[0])
-                    
-                    try: idx_ret = friendly_opts.index(curr_friendly)
-                    except: idx_ret = 0
-                    
-                    selected_ret_friendly = st.selectbox("Retrieval Strategy:", options=friendly_opts, index=idx_ret)
-
-                    st.markdown("---")
-                    if st.form_submit_button("💾 Save Behavior", type="primary"):
-                        sq.update_config_sqlite("model", selected_model)
+    # Bloco Editar/Remover
+    with c_edit:
+        st.subheader("Edit / Remove")
+        with st.container(border=True):
+            if not tools:
+                st.info("Nothing to edit.")
+            else:
+                tool_names = [t['name'] for t in tools]
+                sel_tool_name = st.selectbox("Select Tool", tool_names)
+                sel_tool = next((t for t in tools if t['name'] == sel_tool_name), None)
+                
+                if sel_tool:
+                    with st.form("edit_tool"):
+                        st.caption(f"Editing: {sel_tool['name']}")
+                        et_url = st.text_input("URL", value=sel_tool['url'])
+                        et_desc = st.text_area("Description", value=sel_tool['description'])
                         
-                        tech_name = {v: k for k, v in RETRIEVAL_METHOD_NAMES.items()}[selected_ret_friendly]
-                        sq.update_config_sqlite("retrieval_function", tech_name)
+                        c1, c2 = st.columns(2)
+                        if c1.form_submit_button("Update", type="primary"):
+                            sq.update_tool_sqlite(sel_tool['name'], et_url, et_desc)
+                            st.success("Updated!")
+                            st.rerun()
                         
-                        st.success("Behavior saved!")
+                        if c2.form_submit_button("Delete"):
+                            sq.remove_tool_sqlite(sel_tool['name'])
+                            st.rerun()

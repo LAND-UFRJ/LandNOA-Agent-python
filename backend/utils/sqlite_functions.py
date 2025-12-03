@@ -1,10 +1,9 @@
 import os
 import sqlite3
 import json
-from dotenv import load_dotenv
 import datetime
 
-#load_dotenv(".env")
+
 db_path = "config.db"
 
 
@@ -74,6 +73,20 @@ def update_config_sqlite(name:str, new_value: str):
 
 # Functions to manage tools table
 
+def list_tools_sqlite():
+    """Return a list off dictionaries with all the tools """
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM tools")
+        rows = cur.fetchall()
+        return [dict(row) for row in rows]
+    except sqlite3.Error as e:
+        raise RuntimeError(f"Database error: {e}")
+    finally:
+        conn.close()
+
 def add_tool_sqlite(name:str,url,description)->None:
   """Adds a tool to a database"""  
   try:
@@ -90,6 +103,22 @@ def add_tool_sqlite(name:str,url,description)->None:
     raise RuntimeError(f"Database error: {e}")
   finally:
     conn.close()
+
+def update_tool_sqlite(original_name:str, new_url:str, new_description:str):
+    """Change a existing tool"""
+    try:
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE tools 
+            SET url = ?, description = ?, last_modification = ?
+            WHERE name = ?
+        """, (new_url, new_description, datetime.datetime.now(), original_name))
+        conn.commit()
+    except sqlite3.Error as e:
+        raise RuntimeError(f"Database error: {e}")
+    finally:
+        conn.close()
 
 def remove_tool_sqlite(name:str)->None:
   """removes a tool from the database"""
@@ -120,7 +149,66 @@ def get_prompt_sqlite(prompt_id:int = 0 )->str:
     raise RuntimeError(f"Database error: {e}")
   finally:
     conn.close()
+    
+def list_prompts_sqlite():
+    """
+    Retorna uma lista com TODOS os prompts para preencher o selectbox.
+    Retorna uma lista de dicionários (ex: [{'id': 1, 'obs': 'Persona Financeira', ...}])
+    """
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row # Importante para acessar por nome da coluna
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM prompts ORDER BY id ASC")
+        rows = cur.fetchall()
+        return [dict(row) for row in rows]
+    except sqlite3.Error as e:
+        raise RuntimeError(f"Database error: {e}")
+    finally:
+        conn.close()
 
+def add_prompt_sqlite(obs:str, prompt_text:str):
+    """Cria um novo prompt no banco."""
+    try:
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO prompts (obs, prompt, creation_date, last_modification)
+            VALUES (?, ?, ?, ?)
+        """, (obs, prompt_text, datetime.datetime.now(), datetime.datetime.now()))
+        conn.commit()
+    except sqlite3.Error as e:
+        raise RuntimeError(f"Database error: {e}")
+    finally:
+        conn.close()
+
+def update_prompt_sqlite(prompt_id:int, new_obs:str, new_prompt_text:str):
+    """Atualiza o texto ou o nome (obs) de um prompt existente pelo ID."""
+    try:
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE prompts 
+            SET obs = ?, prompt = ?, last_modification = ?
+            WHERE id = ?
+        """, (new_obs, new_prompt_text, datetime.datetime.now(), prompt_id))
+        conn.commit()
+    except sqlite3.Error as e:
+        raise RuntimeError(f"Database error: {e}")
+    finally:
+        conn.close()
+
+def delete_prompt_sqlite(prompt_id:int):
+    """Remove um prompt do banco pelo ID."""
+    try:
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM prompts WHERE id = ?", (prompt_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        raise RuntimeError(f"Database error: {e}")
+    finally:
+        conn.close()
 #Functions to manage collections table
 
 def create_collection_sqlite(name: str, index_method: str, index_params: dict):

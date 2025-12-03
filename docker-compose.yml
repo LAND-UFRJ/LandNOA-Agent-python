@@ -3,7 +3,7 @@ services:
     image: chromadb/chroma:latest
     container_name: chroma
     ports:
-      - "8000:8000"            # optional; can remove if you don't need host access
+      - "8000:8000"
     volumes:
       - ./chroma-data:/data
     command: ["run", "--host", "0.0.0.0", "--port", "8000"]
@@ -18,9 +18,11 @@ services:
     environment:
       - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
-      - SQLITE_PATH=config.db
+      - SQLITE_PATH=/shared/config.db
       - AGENT_PORT=10000
       - HOST_IP=${HOST_IP}
+    volumes:
+      - ./shared:/shared
     command: ["sh","-c","until curl -sS http://chroma:8000/ >/dev/null 2>&1; do sleep 1; done; python3 backend/agente/root_agent.py"]
     restart: unless-stopped
 
@@ -33,6 +35,8 @@ services:
     environment:
       - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
-      - SQLITE_PATH=config.db
-    command: ["sh","-c","until curl -sS http://chroma:8000/ >/dev/null 2>&1; do sleep 1; done; python3 -m  streamlit run frontend/app.py --server.address 0.0.0.0 --server.port 8501"]
+      - SQLITE_PATH=/shared/config.db
+    volumes:
+      - ./shared:/shared
+    command: ["sh","-c","until curl -sS http://chroma:8000/ >/dev/null 2>&1; do sleep 1; done; python3 -m streamlit run frontend/app.py --server.address 0.0.0.0 --server.port 8501"]
     restart: unless-stopped
