@@ -35,6 +35,7 @@ def create_tables(conn: sqlite3.Connection):
         value TEXT DEFAULT '',
         creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_modification TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        
     );
     """)
     conn.commit()
@@ -42,11 +43,12 @@ def create_tables(conn: sqlite3.Connection):
 def seed_config(conn: sqlite3.Connection):
     cur = conn.cursor()
     entries = [
-        ("openai_api_key",),
-        ("openai_baseurl",),
-        ("model",),
-        ("agent_name",),
-        ("retrieval_function",)
+        ("openai_api_key",""),
+        ("openai_baseurl",""),
+        ("model",""),
+        ("agent_name",""),
+        ("retrieval_function",""),
+        ("prompt_id","")
     ]
     cur.executemany("INSERT OR IGNORE INTO config (name, value) VALUES (?, ?);", entries)
     conn.commit()

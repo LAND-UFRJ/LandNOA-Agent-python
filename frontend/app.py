@@ -14,13 +14,13 @@ import json
 nltk.download("punkt")
 
 # ==============================================================================
-# 1. CONFIGURAÇÃO DA PÁGINA
+# 1. Page configuration
 # ==============================================================================
 st.set_page_config(page_title="LandNOA Manager", layout="wide")
 
 
 # ==============================================================================
-# 2. SERVIÇOS E FUNÇÕES AUXILIARES
+# 2. Needed functions
 # ==============================================================================
 
 def get_models(base_url: str):
@@ -47,7 +47,7 @@ def start_services():
 client, splitter, retriever = start_services() 
 if client is None: st.stop()
 
-# Dicionários de Métodos
+
 METHOD_NAMES = {
     "equal_chunks": "Fixed Size (Langchain)",
     "unstructured_chunks": "Structured (Unstructured)",
@@ -67,10 +67,9 @@ RETRIEVAL_METHOD_NAMES = {
 available_retrievers = [m for m, f in inspect.getmembers(retriever, inspect.ismethod) if m in RETRIEVAL_METHOD_NAMES]
 
 # ==============================================================================
-# 3. NAVBAR (MENU SUPERIOR)
+# 3. NAVBAR
 # ==============================================================================
 
-# Layout do Header
 col_logo, col_menu = st.columns([1, 5])
 
 with col_logo:
@@ -87,17 +86,13 @@ with col_menu:
 
 st.divider()
 
-# ==============================================================================
-# PÁGINA 1: RAG SYSTEM
-# ==============================================================================
+# Tab 1: RAG SYS
 if selected_page == "RAG System":
     
     # Sidebar
     st.sidebar.header("📂 Collection Management")
     try: collection_list = sq.list_collections_sqlite() 
     except: collection_list = []
-
-    # Se st.segmented_control não estiver disponível na sua versão, use st.radio ou st.selectbox
     try:
         mode = st.sidebar.segmented_control("Mode", ["Select", "Create"], selection_mode="single", default="Select")
     except AttributeError:
@@ -206,9 +201,7 @@ if selected_page == "RAG System":
                 with st.container(border=True):
                      st.write(res)
 
-# ==============================================================================
-# PÁGINA 2: AGENT CONFIG
-# ==============================================================================
+#Tab 2 Config
 elif selected_page == "Agent Config":
     
     st.header("⚙️ Agent Configuration")
@@ -244,7 +237,7 @@ elif selected_page == "Agent Config":
                 models = get_models(c_url)
                 if not models: 
                     st.warning("No models found.")
-                    models = ["gpt-4o"] 
+                    models = [""] 
                 
                 try: c_mod = sq.get_config_sqlite("model")
                 except: c_mod = models[0]
@@ -266,9 +259,7 @@ elif selected_page == "Agent Config":
                     sq.update_config_sqlite("retrieval_function", tech)
                     st.success("Brain Updated!")
 
-# ==============================================================================
-# PÁGINA 3: SYSTEM PROMPTS
-# ==============================================================================
+# Tab 3: Prompts
 elif selected_page == "System Prompts":
     
     st.header("📝 System Prompts")
@@ -280,7 +271,7 @@ elif selected_page == "System Prompts":
         try: prompts = sq.list_prompts_sqlite()
         except: prompts = []
         
-        # Modo: Criar ou Editar
+        
         mode = st.radio("Mode:", ["Edit Existing", "Create New"], horizontal=True)
         
         selected_prompt = None
@@ -309,7 +300,7 @@ elif selected_page == "System Prompts":
                             st.error("Please fill all fields.")
                             
             elif mode == "Edit Existing" and selected_prompt:
-                # --- FORMULÁRIO APENAS PARA EDIÇÃO ---
+            
                 with st.form("edit_prompt"):
                     st.caption(f"Editing ID: {selected_prompt['id']}")
                     
@@ -317,25 +308,23 @@ elif selected_page == "System Prompts":
                     ed_text = st.text_area("System Prompt Text", value=selected_prompt['prompt'], height=300)
                     ed_obs = st.text_input("Observation", value=selected_prompt['obs'])
                     
-                    # Botão de Atualizar ocupa a largura total do form
+                    
                     if st.form_submit_button("💾 Update Prompt", type="primary", use_container_width=True):
                         sq.update_prompt_sqlite(selected_prompt['id'], ed_obs, ed_text)
                         st.toast("Prompt updated successfully!", icon="✅")
                         st.rerun()
 
-                # --- ÁREA DE DELETAR (FORA DO FORM) ---
-                st.markdown("---") # Linha separadora
+                
+                st.markdown("---") 
                 with st.expander("🗑️ Delete this prompt", expanded=False):
                     st.warning("This action cannot be undone.")
-                    # Agora sim o botão funciona porque está isolado
+                    
                     if st.button("Confirm Deletion", type="secondary", use_container_width=True):
                         sq.delete_prompt_sqlite(selected_prompt['id'])
                         st.success("Prompt deleted!")
                         st.rerun()
 
-# ==============================================================================
-# PÁGINA 4: TOOLS CONFIG
-# ==============================================================================
+# Tab 4 Tools
 elif selected_page == "Tools Config":
     
     st.header("🔧 Tools Configuration")
@@ -343,7 +332,6 @@ elif selected_page == "Tools Config":
     try: tools = sq.list_tools_sqlite()
     except: tools = []
     
-    # Visualização Tabela
     if tools:
         with st.expander("📚 View Tool Library", expanded=True):
             st.dataframe(tools, use_container_width=True, hide_index=True)
@@ -353,7 +341,7 @@ elif selected_page == "Tools Config":
     st.divider()
     c_add, c_edit = st.columns(2)
     
-    # Bloco Adicionar
+    
     with c_add:
         st.subheader("Add Tool")
         with st.container(border=True):
@@ -373,7 +361,7 @@ elif selected_page == "Tools Config":
                     else:
                         st.warning("Name and URL required.")
 
-    # Bloco Editar/Remover
+   
     with c_edit:
         st.subheader("Edit / Remove")
         with st.container(border=True):
