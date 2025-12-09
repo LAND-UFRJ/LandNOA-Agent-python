@@ -48,23 +48,15 @@ def build_agent() -> LlmAgent:
     ])
   tools.append(_resolve_rag_tool())
   
-  if sf.get_prompt_sqlite() is None:
-    return LlmAgent(
+
+  return LlmAgent(
     model=LiteLlm(model=f'openai/{model_name}',
                   api_base=OPENAI_URL,
                   api_key=OPENAI_KEY),
     name=agent_name,
     tools=tools,
   )
-  else:
-    return LlmAgent(
-      model=LiteLlm(model=f'openai/{model_name}',
-                  api_base=OPENAI_URL,
-                  api_key=OPENAI_KEY),
-      name=agent_name,
-      tools=tools,
-      instruction=sf.get_prompt_sqlite()
-    )
+
 
 def add_tool(name: str, url: str,description:str):
   """Add a tool and update config.json."""
