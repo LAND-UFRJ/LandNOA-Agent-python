@@ -42,7 +42,7 @@ def seed_config(conn: sqlite3.Connection):
     cur = conn.cursor()
     entries = [
         ("openai_api_key", "teste"),
-        ("openai_baseurl", "http://10.246.47.184:10000/v1"),
+        ("openai_baseurl", ""),
         ("model", "qwen3:14b"),
         ("agent_name", "teste_local"),
         ("retrieval_function", "sentence_window_retrieval")
