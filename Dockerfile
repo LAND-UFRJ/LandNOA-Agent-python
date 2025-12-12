@@ -17,6 +17,10 @@ ENV PATH="/root/.local/bin/:$PATH"
 
 COPY requirements.txt .
 
+RUN uv pip install --system \
+    --index-url https://download.pytorch.org/whl/cpu \
+    torch torchvision torchaudio
+
 RUN uv pip install --system -r requirements.txt \
  && uv pip install --system --upgrade --force-reinstall opencv-python-headless
  
