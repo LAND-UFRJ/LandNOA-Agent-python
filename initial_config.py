@@ -47,7 +47,7 @@ def seed_config(conn: sqlite3.Connection):
         ("openai_baseurl",""),
         ("model","qwen3:4b"),
         ("agent_name","Agent"),
-        ("retrieval_function","Top_K"),
+        ("retrieval_function","top_k"),
         ("prompt_id","")
     ]
     cur.executemany("INSERT OR IGNORE INTO config (name, value) VALUES (?, ?);", entries)
