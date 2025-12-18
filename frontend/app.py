@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import requests
 from streamlit_option_menu import option_menu
 import json
+import requests
 
 nltk.download("punkt")
 
@@ -47,6 +48,11 @@ def start_services():
 client, splitter, retriever = start_services() 
 if client is None: st.stop()
 
+def trigger_agent_reload():
+    try:
+        requests.post("http://backend:10000/api/reload_agent", timeout=1)
+    except:
+        pass
 
 METHOD_NAMES = {
     "equal_chunks": "Fixed Size (Langchain)",
@@ -226,6 +232,7 @@ elif selected_page == "Agent Config":
                 sq.update_config_sqlite("openai_baseurl", n_url)
                 sq.update_config_sqlite("openai_api_key", n_key)
                 st.success("Connection Saved!")
+                trigger_agent_reload()
                 st.rerun()
 
     with c_side:
@@ -257,6 +264,7 @@ elif selected_page == "Agent Config":
                     sq.update_config_sqlite("model", sel_mod)
                     tech = {v: k for k, v in RETRIEVAL_METHOD_NAMES.items()}[sel_ret_f]
                     sq.update_config_sqlite("retrieval_function", tech)
+                    trigger_agent_reload()
                     st.success("Brain Updated!")
 
 # Tab 3: Prompts
@@ -295,6 +303,7 @@ elif selected_page == "System Prompts":
                         if new_obs and new_text:
                             sq.add_prompt_sqlite(new_obs, new_text)
                             st.success("Prompt Created!")
+                            trigger_agent_reload()
                             st.rerun()
                         else:
                             st.error("Please fill all fields.")
@@ -312,6 +321,7 @@ elif selected_page == "System Prompts":
                     if st.form_submit_button("💾 Update Prompt", type="primary", use_container_width=True):
                         sq.update_prompt_sqlite(selected_prompt['id'], ed_obs, ed_text)
                         st.toast("Prompt updated successfully!", icon="✅")
+                        trigger_agent_reload()
                         st.rerun()
 
                 
@@ -322,6 +332,7 @@ elif selected_page == "System Prompts":
                     if st.button("Confirm Deletion", type="secondary", use_container_width=True):
                         sq.delete_prompt_sqlite(selected_prompt['id'])
                         st.success("Prompt deleted!")
+                        trigger_agent_reload()
                         st.rerun()
 
 # Tab 4 Tools
@@ -355,6 +366,7 @@ elif selected_page == "Tools Config":
                         try:
                             sq.add_tool_sqlite(t_name, t_url, t_desc)
                             st.success(f"Added '{t_name}'")
+                            trigger_agent_reload()
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error: {e}")
@@ -382,8 +394,10 @@ elif selected_page == "Tools Config":
                         if c1.form_submit_button("Update", type="primary"):
                             sq.update_tool_sqlite(sel_tool['name'], et_url, et_desc)
                             st.success("Updated!")
+                            trigger_agent_reload()
                             st.rerun()
                         
                         if c2.form_submit_button("Delete"):
                             sq.remove_tool_sqlite(sel_tool['name'])
+                            trigger_agent_reload()
                             st.rerun()

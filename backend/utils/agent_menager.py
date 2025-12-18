@@ -4,8 +4,6 @@ from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, SseConnectionParam
 from . import sqlite_functions as sf
 from . import retrieval
 
-OPENAI_URL = sf.get_config_sqlite("openai_baseurl")
-OPENAI_KEY = sf.get_config_sqlite("openai_api_key")
 
 def _resolve_rag_tool():
   """Resolve the RAG tool object named in the DB/config.
@@ -36,6 +34,8 @@ def _resolve_rag_tool():
 
 def build_agent() -> LlmAgent:
   """Build the LlmAgent based on the current config.json."""
+  openai_url = sf.get_config_sqlite("openai_baseurl")
+  openai_key = sf.get_config_sqlite("openai_api_key")
   model_name = sf.get_config_sqlite("model")
   agent_name = sf.get_config_sqlite("agent_name")
   cache_tools = sf.get_tools_sqlite()
@@ -48,11 +48,10 @@ def build_agent() -> LlmAgent:
     ])
   tools.append(_resolve_rag_tool())
   
-
   return LlmAgent(
     model=LiteLlm(model=f'openai/{model_name}',
-                  api_base=OPENAI_URL,
-                  api_key=OPENAI_KEY),
+                  api_base=openai_url,
+                  api_key=openai_key),
     name=agent_name,
     tools=tools,
   )
